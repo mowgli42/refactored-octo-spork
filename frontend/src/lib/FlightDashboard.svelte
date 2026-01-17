@@ -5,6 +5,14 @@
   let newEventName = '';
   let loading = true;
   let error = null;
+  
+  // File upload state
+  let selectedEventId = null;
+  let fileForm = {
+    filename: '',
+    source_url: '',
+    filetype: 'flight_log'
+  };
 
   const API_URL = 'http://localhost:8000';
 
@@ -46,7 +54,41 @@
     }
   }
 
+  function openFileForm(eventId) {
+    selectedEventId = eventId;
+    fileForm = { filename: '', source_url: '', filetype: 'flight_log' };
+  }
+
+  async function addFileToEvent() {
+    if (!selectedEventId || !fileForm.source_url) return;
+
+    try {
+      // Auto-generate filename if empty
+      if (!fileForm.filename) {
+        fileForm.filename = fileForm.source_url.split('/').pop() || 'unknown_file';
+      }
+
+      const response = await fetch(`${API_URL}/events/${selectedEventId}/files/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fileForm)
+      });
+
+      if (response.ok) {
+        alert('File registered and processing started!');
+        selectedEventId = null;
+        await fetchEvents(); // Refresh status
+      } else {
+        alert('Failed to register file');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error adding file');
+    }
+  }
+
   function getStatusColor(status) {
+    if (!status) return 'bg-gray-100 text-gray-800';
     switch (status.toLowerCase()) {
       case 'complete': return 'bg-green-100 text-green-800';
       case 'processing': return 'bg-blue-100 text-blue-800';
@@ -108,12 +150,44 @@
                 </span>
               </td>
               <td>
-                <button class="small">View Details</button>
+                <button class="small" on:click={() => openFileForm(event.id)}>Add File</button>
               </td>
             </tr>
           {/each}
         </tbody>
       </table>
+    </div>
+  {/if}
+
+  {#if selectedEventId}
+    <div class="modal-backdrop">
+      <div class="modal">
+        <h2>Add File to Event #{selectedEventId}</h2>
+        
+        <div class="form-group">
+          <label for="source-url">Source URL / Path:</label>
+          <input id="source-url" type="text" bind:value={fileForm.source_url} placeholder="https://... or /path/to/file.csv" />
+        </div>
+        
+        <div class="form-group">
+          <label for="filename">Filename (Optional):</label>
+          <input id="filename" type="text" bind:value={fileForm.filename} placeholder="flight_data.csv" />
+        </div>
+
+        <div class="form-group">
+          <label for="filetype">File Type:</label>
+          <select id="filetype" bind:value={fileForm.filetype}>
+            <option value="flight_log">Flight Log</option>
+            <option value="telemetry">Telemetry</option>
+            <option value="video">Video</option>
+          </select>
+        </div>
+
+        <div class="modal-actions">
+          <button on:click={addFileToEvent}>Register & Process</button>
+          <button class="secondary" on:click={() => selectedEventId = null}>Cancel</button>
+        </div>
+      </div>
     </div>
   {/if}
 </div>
@@ -138,11 +212,16 @@
     gap: 1rem;
   }
 
-  input {
+  input, select {
     padding: 0.5rem;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 1rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .add-event input {
     flex-grow: 1;
   }
 
@@ -158,6 +237,14 @@
 
   button:hover {
     background-color: #0052a3;
+  }
+
+  button.secondary {
+    background-color: #666;
+  }
+  
+  button.secondary:hover {
+    background-color: #555;
   }
 
   button.small {
@@ -213,5 +300,47 @@
     background: #ffe6e6;
     padding: 1rem;
     border-radius: 4px;
+  }
+
+  /* Modal Styles */
+  .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .modal {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    width: 400px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+
+  .modal h2 {
+    margin-top: 0;
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 2rem;
   }
 </style>
