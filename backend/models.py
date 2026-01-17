@@ -24,7 +24,13 @@ class DataFile(Base):
     id = Column(Integer, primary_key=True, index=True)
     event_id = Column(Integer, ForeignKey("flight_events.id"))
     filename = Column(String)
-    filepath = Column(String)
+    
+    # Changed from file path to source_url (which could be a local path or http url)
+    source_url = Column(String) 
+    
+    # Path to the cached H5 file
+    processed_file_path = Column(String, nullable=True)
+    
     filetype = Column(String) # e.g. "flight_log", "video", "telemetry"
     
     event = relationship("FlightEvent", back_populates="files")

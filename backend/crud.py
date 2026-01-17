@@ -21,6 +21,17 @@ def create_event_file(db: Session, file: schemas.DataFileCreate, event_id: int):
     db.refresh(db_file)
     return db_file
 
+def get_data_file(db: Session, file_id: int):
+    return db.query(models.DataFile).filter(models.DataFile.id == file_id).first()
+
+def update_file_processed_path(db: Session, file_id: int, path: str):
+    file = get_data_file(db, file_id)
+    if file:
+        file.processed_file_path = path
+        db.commit()
+        db.refresh(file)
+    return file
+
 def update_event_status(db: Session, event_id: int, status_type: str, status: str):
     event = get_flight_event(db, event_id)
     if not event:

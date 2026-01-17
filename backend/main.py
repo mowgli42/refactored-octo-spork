@@ -1,9 +1,9 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import crud, models, schemas
+from . import crud, models, schemas, processing
 from .database import SessionLocal, engine
 
 models.Base.metadata.create_all(bind=engine)
@@ -43,11 +43,46 @@ def read_event(event_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Event not found")
     return db_event
 
+def process_file_task(file_id: int, event_id: int, source_url: str, filetype: str):
+    # Create a new session for the background task
+    db = SessionLocal()
+    try:
+        # Update status to processing
+        crud.update_event_status(db, event_id, "parse", "Processing")
+        
+        # Run processing
+        h5_path = processing.process_file(source_url, filetype)
+        
+        # Save result path
+        crud.update_file_processed_path(db, file_id, h5_path)
+        
+        # Update status to complete
+        crud.update_event_status(db, event_id, "parse", "Complete")
+        
+    except Exception as e:
+        print(f"Error processing file: {e}")
+        crud.update_event_status(db, event_id, "parse", "Error")
+    finally:
+        db.close()
+
 @app.post("/events/{event_id}/files/", response_model=schemas.DataFile)
 def create_file_for_event(
-    event_id: int, file: schemas.DataFileCreate, db: Session = Depends(get_db)
+    event_id: int, 
+    file: schemas.DataFileCreate, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
 ):
-    return crud.create_event_file(db=db, file=file, event_id=event_id)
+    # Register file
+    db_file = crud.create_event_file(db=db, file=file, event_id=event_id)
+    
+    # Update event status
+    crud.update_event_status(db, event_id, "import", "Complete")
+    
+    # Trigger processing in background
+    # Note: We pass the IDs and raw data, not the DB objects or session, to avoid thread issues
+    background_tasks.add_task(process_file_task, db_file.id, event_id, db_file.source_url, db_file.filetype)
+    
+    return db_file
 
 @app.patch("/events/{event_id}/status", response_model=schemas.FlightEvent)
 def update_status(

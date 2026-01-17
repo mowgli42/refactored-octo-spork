@@ -4,7 +4,7 @@ from datetime import datetime
 
 class DataFileBase(BaseModel):
     filename: str
-    filepath: str
+    source_url: str
     filetype: str
 
 class DataFileCreate(DataFileBase):
@@ -13,6 +13,7 @@ class DataFileCreate(DataFileBase):
 class DataFile(DataFileBase):
     id: int
     event_id: int
+    processed_file_path: Optional[str] = None
 
     class Config:
         from_attributes = True
