@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "refactored_octo_spork",
+  "project_id": "d403c164-a772-41ac-846e-0e9cb947ab87"
+}
