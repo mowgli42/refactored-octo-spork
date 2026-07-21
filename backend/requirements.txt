@@ -4,6 +4,7 @@ sqlalchemy
 pydantic
 python-multipart
 pandas
+pyarrow
 tables
 requests
 pytest
