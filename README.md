@@ -1,67 +1,49 @@
 # Flight Test Data Management System
 
-**Now with Parquet ingestion + interactive D3.js flight data plotting!**
+**Parquet-native flight test data platform with interactive D3.js visualization.**
 
-This project is a framework for tracking flight test events and data files, with strong support for efficient aircraft telemetry analysis.
+This project helps aerospace teams track flight test events, ingest telemetry (Parquet/CSV first-class), and explore aircraft performance with powerful interactive plots.
 
-## Key Features (Updated)
+## Screenshots
 
-- Track flight test events with status workflow (Import / Parse / Analysis)
-- Register data files by local path or URL (now supports **.parquet**, .csv, .h5 natively)
-- Backend processing: realistic mock telemetry or real Parquet/CSV flight test data → cached as high-performance Parquet
-- **New**: `/files/{id}/data` API endpoint serves downsampled JSON ready for visualization
-- **New**: Interactive D3.js time-series plots in Svelte frontend (altitude, airspeed, pitch, roll, vertical speed, AoA, G-force etc.)
-  - Toggle parameters via legend
-  - Hover tooltips with values
-  - Mouse wheel zoom & pan
-  - Clean aviation-themed styling
+### Main Dashboard
+![Flight Test Events Dashboard](screenshots/dashboard.png)
 
-## Project Structure
+### Registering a Parquet File
+![Add File Modal](screenshots/add-file-modal.png)
 
-- `backend/`: FastAPI + SQLAlchemy + pandas/pyarrow (Parquet first-class)
-- `frontend/`: Svelte 5 + Vite + D3 v7
+### Interactive D3.js Flight Data Plot
+![D3 Flight Test Plot](screenshots/d3-plot.png)
 
-## Getting Started
+### Dashboard with Plot Modal Open
+![Dashboard + Plot](screenshots/dashboard-with-plot.png)
 
-### Backend
+## Key Features
 
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cd ..
-python3 -m uvicorn backend.main:app --reload
-```
+- Event tracking with Import / Parse / Analysis status workflow
+- Register local or remote data files (excellent **Parquet** support + realistic mock generator)
+- Background processing into efficient columnar Parquet cache
+- REST API endpoint for downsampled data ready for visualization
+- Beautiful interactive D3.js time-series plots (toggle params, tooltip, zoom/pan)
 
-API at http://localhost:8000 , docs at /docs
+## Quick Start
 
-### Frontend
+See detailed instructions in the repo.
 
-```bash
-cd frontend
-npm install   # now includes d3
-npm run dev
-```
+## GitHub Issues (Roadmap)
 
-Dashboard at http://localhost:5173
+We track the next improvements as GitHub issues:
 
-## How to Use Parquet + D3 Plotting
+- [#3 Implement real multipart file upload](https://github.com/mowgli42/refactored-octo-spork/issues/3)
+- [#4 Wire Plot Data button to actual file IDs](https://github.com/mowgli42/refactored-octo-spork/issues/4)
+- [#5 Enhance D3 plot (brush, dual-axis, export)](https://github.com/mowgli42/refactored-octo-spork/issues/5)
+- [#6 Watched directory auto-import scanner](https://github.com/mowgli42/refactored-octo-spork/issues/6)
+- [#7 Support legacy .mat MATLAB flight test files](https://github.com/mowgli42/refactored-octo-spork/issues/7)
+- [#8 Per-event file listing + multi-file comparison plots](https://github.com/mowgli42/refactored-octo-spork/issues/8)
 
-1. Add a new Event (e.g. "Flight Test 47 - F-35 Demo")
-2. Click "Add File" → paste **full local path** to your `.parquet` flight test file (or use the generated mock by leaving path as-is)
-3. Processing runs in background → status becomes Complete / Ready
-4. Click the green **"📈 Open D3 Flight Data Plot"** button (or "Plot Data" on a processed row)
-5. Explore interactive charts of aircraft parameters over time
+Contributions and feedback welcome!
 
-Tip: For real data, ensure the Parquet has a `timestamp` column (or datetime index) and numeric telemetry columns. The system auto-detects and down-samples for smooth D3 rendering.
-
-## Development Plan
-
-See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — Phase 3 (Visualization) is now substantially complete with D3 + Parquet.
-
-## Next Ideas
-- Full file upload (multipart) instead of path-only
-- Per-event file listing + multi-file comparison plots
-- Export plot as SVG/PNG or generate PDF reports
-- Integration with larger Dashlink-style datasets
+## Tech Stack
+- Backend: FastAPI, SQLAlchemy, pandas + pyarrow
+- Frontend: Svelte 5 + Vite + D3 v7
+- Data: Parquet (primary), legacy HDF5/CSV support
