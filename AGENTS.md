@@ -3,7 +3,7 @@
 ## Project context
 
 refactored-octo-spork is a Dashlink flight data API with a Svelte frontend.
-Read `README.md`, then inspect `backend/` or `frontend/` depending on the task.
+Read `README.md`, `openspec/project.md`, and `BEADS.md`, then inspect `backend/` or `frontend/` depending on the task.
 
 ## Local setup
 

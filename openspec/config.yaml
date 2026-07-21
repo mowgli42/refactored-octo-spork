@@ -1,0 +1,7 @@
+schema: spec-driven
+
+context: |
+  Flight Test Data Management: FastAPI + Svelte dashboard for flight test events,
+  Parquet-first telemetry ingest, and D3 time-series visualization.
+  Read openspec/project.md, docs/architecture.md, and AGENTS.md before implementing.
+  Spec → Beads → implement → pytest (see openspec/WORKFLOW.md).
