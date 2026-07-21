@@ -1,7 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
+
+import pandas as pd
 
 from . import crud, models, schemas, processing
 from .database import SessionLocal, engine
@@ -51,13 +53,14 @@ def process_file_task(file_id: int, event_id: int, source_url: str, filetype: st
         crud.update_event_status(db, event_id, "parse", "Processing")
         
         # Run processing
-        h5_path = processing.process_file(source_url, filetype)
+        processed_path = processing.process_file(source_url, filetype)
         
         # Save result path
-        crud.update_file_processed_path(db, file_id, h5_path)
+        crud.update_file_processed_path(db, file_id, processed_path)
         
         # Update status to complete
         crud.update_event_status(db, event_id, "parse", "Complete")
+        crud.update_event_status(db, event_id, "analysis", "Ready")
         
     except Exception as e:
         print(f"Error processing file: {e}")
@@ -79,10 +82,57 @@ def create_file_for_event(
     crud.update_event_status(db, event_id, "import", "Complete")
     
     # Trigger processing in background
-    # Note: We pass the IDs and raw data, not the DB objects or session, to avoid thread issues
     background_tasks.add_task(process_file_task, db_file.id, event_id, db_file.source_url, db_file.filetype)
     
     return db_file
+
+@app.get("/files/{file_id}/data")
+def get_file_data(
+    file_id: int, 
+    limit: int = 3000,
+    columns: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Return (downsampled) flight data for D3.js visualization."""
+    db_file = crud.get_data_file(db, file_id)
+    if not db_file or not db_file.processed_file_path:
+        raise HTTPException(status_code=404, detail="File not found or not yet processed")
+    
+    try:
+        df = processing.get_data_frame(db_file.processed_file_path)
+        
+        # Select specific columns if requested
+        if columns:
+            requested = [c.strip() for c in columns.split(",") if c.strip()]
+            available = [c for c in requested if c in df.columns]
+            if available:
+                keep = available
+                if "timestamp" in df.columns and "timestamp" not in keep:
+                    keep = ["timestamp"] + keep
+                df = df[keep]
+        
+        # Downsample for frontend performance (D3 handles thousands well)
+        if len(df) > limit:
+            step = max(1, len(df) // limit)
+            df = df.iloc[::step].copy()
+        
+        # Prepare timestamp for JSON (ISO format)
+        if "timestamp" in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
+                df["timestamp"] = df["timestamp"].dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            else:
+                df["timestamp"] = df["timestamp"].astype(str)
+        
+        return {
+            "file_id": file_id,
+            "filename": db_file.filename,
+            "row_count": len(df),
+            "total_rows_original": len(processing.get_data_frame(db_file.processed_file_path)),
+            "columns": list(df.columns),
+            "data": df.to_dict(orient="records")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving data: {str(e)}")
 
 @app.patch("/events/{event_id}/status", response_model=schemas.FlightEvent)
 def update_status(
@@ -102,4 +152,4 @@ def update_status(
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Flight Test Dashboard API"}
+    return {"message": "Welcome to Flight Test Dashboard API - now with Parquet + D3 ready!"}
