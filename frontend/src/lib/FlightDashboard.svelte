@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import FlightDataPlot from './FlightDataPlot.svelte';
 
   let events = [];
   let newEventName = '';
@@ -13,6 +14,11 @@
     source_url: '',
     filetype: 'flight_log'
   };
+
+  // Plot modal state
+  let showPlotModal = false;
+  let plotFileId = null;
+  let plotInitialData = null;
 
   const API_URL = 'http://localhost:8000';
 
@@ -63,7 +69,6 @@
     if (!selectedEventId || !fileForm.source_url) return;
 
     try {
-      // Auto-generate filename if empty
       if (!fileForm.filename) {
         fileForm.filename = fileForm.source_url.split('/').pop() || 'unknown_file';
       }
@@ -75,9 +80,9 @@
       });
 
       if (response.ok) {
-        alert('File registered and processing started!');
+        alert('File registered and processing started! (Parquet supported)');
         selectedEventId = null;
-        await fetchEvents(); // Refresh status
+        await fetchEvents();
       } else {
         alert('Failed to register file');
       }
@@ -93,19 +98,50 @@
       case 'complete': return 'bg-green-100 text-green-800';
       case 'processing': return 'bg-blue-100 text-blue-800';
       case 'error': return 'bg-red-100 text-red-800';
+      case 'ready': return 'bg-emerald-100 text-emerald-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  }
+
+  function openPlotDemo() {
+    // Demo: open plot with mock data (or set plotFileId=1 after you process a file via the form)
+    plotFileId = null;
+    plotInitialData = null; // component will show empty state or you can hardcode sample here
+    showPlotModal = true;
+    // For immediate demo, we can also trigger a backend process but for now show the powerful new plotter
+  }
+
+  function closePlotModal() {
+    showPlotModal = false;
+    plotFileId = null;
+    plotInitialData = null;
+  }
+
+  // Example: to use with real processed file, after adding+processing a file, call openPlotForFile(fileId)
+  function openPlotForFile(fId) {
+    plotFileId = fId;
+    plotInitialData = null;
+    showPlotModal = true;
   }
 </script>
 
 <div class="container">
-  <h1>Flight Test Events Dashboard</h1>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>Flight Test Events Dashboard</h1>
+    <button on:click={openPlotDemo} style="background: #059669; font-size: 0.9rem; padding: 0.5rem 1rem;">
+      📈 Open D3 Flight Data Plot
+    </button>
+  </div>
+
+  <p style="color: #666; margin-bottom: 1.5rem; font-size: 0.95rem;">
+    Track flight test events • Register Parquet/CSV telemetry files • Process into efficient cache • Visualize with interactive D3.js plots
+  </p>
 
   <div class="add-event">
     <input 
       type="text" 
       bind:value={newEventName} 
-      placeholder="New Event Name"
+      placeholder="New Event Name (e.g. Test Flight 42 - Tail 652)"
     />
     <button on:click={addEvent}>Add Event</button>
   </div>
@@ -149,8 +185,13 @@
                   {event.analysis_status}
                 </span>
               </td>
-              <td>
+              <td style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <button class="small" on:click={() => openFileForm(event.id)}>Add File</button>
+                {#if event.parse_status === 'Complete' || event.analysis_status === 'Ready'}
+                  <button class="small" style="background:#059669; color:white; border:none;" on:click={() => openPlotForFile(1 /* update with actual file id from your processed DataFile */)}>
+                    Plot Data
+                  </button>
+                {/if}
               </td>
             </tr>
           {/each}
@@ -165,27 +206,49 @@
         <h2>Add File to Event #{selectedEventId}</h2>
         
         <div class="form-group">
-          <label for="source-url">Source URL / Path:</label>
-          <input id="source-url" type="text" bind:value={fileForm.source_url} placeholder="https://... or /path/to/file.csv" />
+          <label for="source-url">Source URL / Local Path (supports .parquet, .csv, .h5):</label>
+          <input id="source-url" type="text" bind:value={fileForm.source_url} placeholder="/path/to/flight_data.parquet or https://..." />
+          <small style="color:#666">Tip: Place a real Parquet flight test file on the backend host and paste the full local path.</small>
         </div>
         
         <div class="form-group">
           <label for="filename">Filename (Optional):</label>
-          <input id="filename" type="text" bind:value={fileForm.filename} placeholder="flight_data.csv" />
+          <input id="filename" type="text" bind:value={fileForm.filename} placeholder="flight_data.parquet" />
         </div>
 
         <div class="form-group">
           <label for="filetype">File Type:</label>
           <select id="filetype" bind:value={fileForm.filetype}>
-            <option value="flight_log">Flight Log</option>
+            <option value="flight_log">Flight Log / Telemetry</option>
             <option value="telemetry">Telemetry</option>
-            <option value="video">Video</option>
+            <option value="video">Video (placeholder)</option>
           </select>
         </div>
 
         <div class="modal-actions">
-          <button on:click={addFileToEvent}>Register & Process</button>
+          <button on:click={addFileToEvent}>Register & Process (Parquet ready)</button>
           <button class="secondary" on:click={() => selectedEventId = null}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if showPlotModal}
+    <div class="modal-backdrop" on:click|self={closePlotModal}>
+      <div class="modal large" on:click|stopPropagation>
+        <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom:1rem;">
+          <h2 style="margin:0;">Interactive Flight Test Data Plot (D3.js)</h2>
+          <button class="secondary" on:click={closePlotModal}>Close</button>
+        </div>
+        
+        <FlightDataPlot 
+          apiBase={API_URL} 
+          fileId={plotFileId} 
+          initialData={plotInitialData} 
+        />
+        
+        <div style="margin-top: 1rem; font-size: 0.85rem; color: #666; text-align: center;">
+          Zoom with mouse wheel • Hover for tooltip • Click legend to toggle parameters • Supports real Parquet flight data
         </div>
       </div>
     </div>
@@ -194,28 +257,28 @@
 
 <style>
   .container {
-    max-width: 1000px;
+    max-width: 1100px;
     margin: 0 auto;
     padding: 2rem;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
   }
 
   h1 {
-    color: #333;
-    border-bottom: 2px solid #eee;
-    padding-bottom: 1rem;
+    color: #1f2937;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 0.75rem;
   }
 
   .add-event {
-    margin: 2rem 0;
+    margin: 1.5rem 0;
     display: flex;
     gap: 1rem;
   }
 
   input, select {
     padding: 0.5rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
     font-size: 1rem;
     width: 100%;
     box-sizing: border-box;
@@ -229,10 +292,11 @@
     background-color: #0066cc;
     color: white;
     border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
+    padding: 0.55rem 1.1rem;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 1rem;
+    font-weight: 500;
   }
 
   button:hover {
@@ -240,66 +304,66 @@
   }
 
   button.secondary {
-    background-color: #666;
+    background-color: #6b7280;
   }
   
   button.secondary:hover {
-    background-color: #555;
+    background-color: #4b5563;
   }
 
   button.small {
     font-size: 0.8rem;
-    padding: 0.25rem 0.5rem;
-    background-color: #f0f0f0;
-    color: #333;
-    border: 1px solid #ccc;
+    padding: 0.3rem 0.7rem;
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
   }
 
   button.small:hover {
-    background-color: #e0e0e0;
+    background-color: #e5e7eb;
   }
 
   table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 1rem;
+    margin-top: 0.5rem;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
 
   th, td {
-    padding: 1rem;
+    padding: 0.85rem 1rem;
     text-align: left;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid #f3f4f6;
   }
 
   th {
-    background-color: #f8f9fa;
+    background-color: #f8fafc;
     font-weight: 600;
+    color: #334155;
   }
 
   .status-badge {
-    padding: 0.25rem 0.5rem;
-    border-radius: 999px;
-    font-size: 0.875rem;
-    font-weight: 500;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
   }
 
-  .bg-green-100 { background-color: #d1fae5; }
-  .text-green-800 { color: #065f46; }
-  
-  .bg-blue-100 { background-color: #dbeafe; }
-  .text-blue-800 { color: #1e40af; }
-  
-  .bg-red-100 { background-color: #fee2e2; }
-  .text-red-800 { color: #991b1b; }
-  
-  .bg-gray-100 { background-color: #f3f4f6; }
-  .text-gray-800 { color: #1f2937; }
+  .bg-green-100 { background-color: #d1fae5; color: #065f46; }
+  .bg-blue-100 { background-color: #dbeafe; color: #1e40af; }
+  .bg-red-100 { background-color: #fee2e2; color: #991b1b; }
+  .bg-gray-100 { background-color: #f3f4f6; color: #374151; }
+  .bg-emerald-100 { background-color: #d1fae5; color: #065f46; }
 
   .error {
-    color: red;
-    background: #ffe6e6;
+    color: #dc2626;
+    background: #fef2f2;
     padding: 1rem;
-    border-radius: 4px;
+    border-radius: 6px;
   }
 
   /* Modal Styles */
@@ -309,38 +373,52 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.5);
+    background: rgba(15, 23, 42, 0.6);
     display: flex;
     justify-content: center;
     align-items: center;
+    z-index: 100;
   }
 
   .modal {
     background: white;
     padding: 2rem;
-    border-radius: 8px;
-    width: 400px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-radius: 12px;
+    width: 420px;
+    max-height: 85vh;
+    overflow: auto;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  }
+
+  .modal.large {
+    width: 95%;
+    max-width: 980px;
   }
 
   .modal h2 {
     margin-top: 0;
+    color: #1e2937;
   }
 
   .form-group {
-    margin-bottom: 1rem;
+    margin-bottom: 1.1rem;
   }
 
   .form-group label {
     display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+    color: #334155;
   }
 
   .modal-actions {
     display: flex;
     justify-content: flex-end;
     gap: 1rem;
-    margin-top: 2rem;
+    margin-top: 1.5rem;
+  }
+
+  .table-container {
+    overflow-x: auto;
   }
 </style>
