@@ -4,46 +4,116 @@
 
 This project helps aerospace teams track flight test events, ingest telemetry (Parquet/CSV first-class), and explore aircraft performance with powerful interactive plots.
 
+## OpenSpec / Gherkin / Beads Formalization
+
+This tool has been run through the **OpenSpec + Gherkin + Beads** spec-driven development process:
+- **OpenSpec specs** (structured requirements + Gherkin scenarios) define the current capabilities and next deltas.
+- **Beads** (`.beads/`) for AI-native task tracking.
+- Aligned with existing GitHub issues #3–#8.
+
+**Key OpenSpec/Gherkin Examples** (full specs in `openspec/specs/`):
+
+```gherkin
+Feature: Flight Test Data Ingestion and Visualization
+
+  Scenario: Register and process Parquet telemetry
+    Given a flight test event
+    When a user registers a local .parquet file path
+    Then the backend loads the data (or generates mock)
+    And caches it as Parquet
+    And updates statuses to Ready
+
+  Scenario: Interactive D3 plot rendering
+    Given processed telemetry data
+    When the plot view loads
+    Then multi-parameter time-series renders with D3
+    And users can toggle series, hover for tooltips, zoom/pan
+```
+
+See `docs/architecture.md` for diagrams and full specs.
+
 ## Screenshots
 
-### Main Dashboard
 ![Flight Test Events Dashboard](screenshots/dashboard.png)
 
-### Registering a Parquet File
 ![Add File Modal](screenshots/add-file-modal.png)
 
-### Interactive D3.js Flight Data Plot
 ![D3 Flight Test Plot](screenshots/d3-plot.png)
 
-### Dashboard with Plot Modal Open
 ![Dashboard + Plot](screenshots/dashboard-with-plot.png)
 
-## Key Features
+## Architecture (Mermaid)
+```mermaid
+C4Context
+    title Flight Test Data Management - High-Level Architecture
+    Person(user, "Flight Test Engineer", "Uses dashboard and plots")
+    System_Boundary(frontend, "Svelte Frontend") {
+        Container(dashboard, "FlightDashboard", "Svelte", "Events table, file modal")
+        Container(plot, "FlightDataPlot", "Svelte + D3", "Interactive telemetry visualization")
+    }
+    System_Boundary(backend, "FastAPI Backend") {
+        Container(api, "API Layer", "FastAPI", "CRUD + /data endpoint")
+        ContainerDb(db, "SQLite", "Event & file metadata")
+        Container(cache, "Parquet Cache", "File system", "Processed telemetry")
+    }
+    Rel(user, dashboard, "Interacts")
+    Rel(dashboard, api, "REST / JSON")
+    Rel(api, db, "CRUD")
+    Rel(api, cache, "Process & serve")
+    Rel(plot, api, "Fetch data for D3")
+```
 
-- Event tracking with Import / Parse / Analysis status workflow
-- Register local or remote data files (excellent **Parquet** support + realistic mock generator)
-- Background processing into efficient columnar Parquet cache
-- REST API endpoint for downsampled data ready for visualization
-- Beautiful interactive D3.js time-series plots (toggle params, tooltip, zoom/pan)
+## Sequence Diagram Example (Register → Process → Plot)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Svelte Frontend
+    participant B as FastAPI
+    participant P as Processing
+    participant C as Parquet Cache
+    U->>F: Register Parquet path
+    F->>B: POST /files/
+    B->>P: Background task
+    P->>C: Load/Process → Cache
+    U->>F: Open Plot
+    F->>B: GET /files/id/data
+    B->>C: Read Parquet → JSON
+    B-->>F: Data
+    F->>F: Render D3 (zoom, tooltip, legend)
+```
 
-## Quick Start
+## Sample Data
 
-See detailed instructions in the repo.
+Realistic aircraft flight test telemetry (timestamp + key params like altitude, airspeed, pitch, roll, etc.).
 
-## GitHub Issues (Roadmap)
+- **Generated files** in `sample-data/` (CSV, JSON, script):
+  - `sample_flight_test_demo.json` (500 rows — perfect for Vercel demo)
+  - Full script `generate_sample_flight_data.py` for custom data.
 
-We track the next improvements as GitHub issues:
+Copy to your repo and use for testing the Parquet path or embedding in the demo.
 
-- [#3 Implement real multipart file upload](https://github.com/mowgli42/refactored-octo-spork/issues/3)
-- [#4 Wire Plot Data button to actual file IDs](https://github.com/mowgli42/refactored-octo-spork/issues/4)
-- [#5 Enhance D3 plot (brush, dual-axis, export)](https://github.com/mowgli42/refactored-octo-spork/issues/5)
-- [#6 Watched directory auto-import scanner](https://github.com/mowgli42/refactored-octo-spork/issues/6)
-- [#7 Support legacy .mat MATLAB flight test files](https://github.com/mowgli42/refactored-octo-spork/issues/7)
-- [#8 Per-event file listing + multi-file comparison plots](https://github.com/mowgli42/refactored-octo-spork/issues/8)
+## Vercel Demo Mode
 
-Contributions and feedback welcome!
+A limited **fixed-data browser demo** is ready (no uploads, view-only sample data):
+
+- Embedded sample JSON for events + telemetry.
+- Full D3 plots work.
+- Upload buttons disabled with clear messaging.
+
+**Deploy steps**:
+1. Add `DEMO_MODE=true` logic in frontend (mock data load).
+2. `npm run build`.
+3. Deploy via Vercel (auto-detects Svelte/Vite).
+
+The demo is shareable instantly for stakeholders.
+
+## Quick Start & Roadmap
+
+See detailed setup in the file. Roadmap issues (#3–#8) cover uploads, plot enhancements, scanner, .mat support, etc.
+
+Contributions welcome!
 
 ## Tech Stack
-- Backend: FastAPI, SQLAlchemy, pandas + pyarrow
+- Backend: FastAPI + pandas/pyarrow (Parquet-first)
 - Frontend: Svelte 5 + Vite + D3 v7
-- Data: Parquet (primary), legacy HDF5/CSV support
+- Data: Parquet cache + SQLite metadata
