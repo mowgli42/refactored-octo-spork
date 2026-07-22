@@ -30,6 +30,11 @@
     if (initialData && initialData.length > 0) {
       data = initialData;
       columns = Object.keys(data[0] || {});
+      const preferred = ['altitude_ft', 'airspeed_kt', 'pitch_deg', 'vertical_speed_fpm', 'roll_deg'];
+      selectedParams = preferred.filter(p => columns.includes(p));
+      if (selectedParams.length === 0) {
+        selectedParams = columns.filter(c => c !== 'timestamp' && typeof data[0][c] === 'number').slice(0, 4);
+      }
       initChart();
     } else if (fileId) {
       fetchData();
