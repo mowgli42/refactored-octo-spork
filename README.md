@@ -20,6 +20,10 @@ This project helps aerospace teams track flight test events, ingest telemetry (P
 
 The build uses: `cd frontend && npm install && VITE_DEMO_MODE=true npm run build`
 
+**Live demo:** https://refactored-octo-spork-eosin.vercel.app
+
+See [docs/demo-vs-production.md](docs/demo-vs-production.md) for how the demo differs from the full FastAPI workflow.
+
 **What you get**:
 - Fully working dashboard with sample flight events.
 - Interactive D3 plots using embedded sample telemetry.
