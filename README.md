@@ -4,6 +4,32 @@
 
 This project helps aerospace teams track flight test events, ingest telemetry (Parquet/CSV first-class), and explore aircraft performance with powerful interactive plots.
 
+## Vercel Demo Deployment (Quick Shareable Demo)
+
+✅ **Ready for one-click Vercel deploy** with fixed sample data (no uploads, full interactive D3 plots).
+
+### Deploy in 2 Minutes
+1. Make sure latest code is on `main` (including the new `vercel.json`).
+2. Go to [vercel.com/new](https://vercel.com/new) → Import Git Repository → select this repo.
+3. Vercel will detect Vite automatically thanks to `vercel.json`.
+4. **Important**: In Vercel Project Settings → Environment Variables, add:
+   - Name: `VITE_DEMO_MODE`
+   - Value: `true`
+   - Environments: Production + Preview
+5. Deploy.
+
+The build uses: `cd frontend && npm install && VITE_DEMO_MODE=true npm run build`
+
+**What you get**:
+- Fully working dashboard with sample flight events.
+- Interactive D3 plots using embedded sample telemetry.
+- Upload and new data features disabled (clear demo messaging).
+- SPA routing handled correctly.
+
+`vercel.json` is now in the repo root for this purpose.
+
+If you later want a full backend deployment, you can create a separate Vercel project or use serverless functions.
+
 ## OpenSpec / Gherkin / Beads Formalization
 
 This tool has been run through the **OpenSpec + Gherkin + Beads** spec-driven development process:
@@ -91,21 +117,6 @@ Realistic aircraft flight test telemetry (timestamp + key params like altitude, 
   - Full script `generate_sample_flight_data.py` for custom data.
 
 Copy to your repo and use for testing the Parquet path or embedding in the demo.
-
-## Vercel Demo Mode
-
-A limited **fixed-data browser demo** is ready (no uploads, view-only sample data):
-
-- Embedded sample JSON for events + telemetry.
-- Full D3 plots work.
-- Upload buttons disabled with clear messaging.
-
-**Deploy steps**:
-1. Add `DEMO_MODE=true` logic in frontend (mock data load).
-2. `npm run build`.
-3. Deploy via Vercel (auto-detects Svelte/Vite).
-
-The demo is shareable instantly for stakeholders.
 
 ## Quick Start
 
