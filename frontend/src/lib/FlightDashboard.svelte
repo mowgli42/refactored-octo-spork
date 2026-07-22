@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import FlightDataPlot from './FlightDataPlot.svelte';
+  import { API_BASE } from './api.js';
 
   let events = [];
   let newEventName = '';
@@ -20,7 +21,7 @@
   let plotFileId = null;
   let plotInitialData = null;
 
-  const API_URL = 'http://localhost:8000';
+  const API_URL = API_BASE;
 
   onMount(async () => {
     await fetchEvents();
@@ -187,8 +188,8 @@
               </td>
               <td style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <button class="small" on:click={() => openFileForm(event.id)}>Add File</button>
-                {#if event.parse_status === 'Complete' || event.analysis_status === 'Ready'}
-                  <button class="small" style="background:#059669; color:white; border:none;" on:click={() => openPlotForFile(1 /* update with actual file id from your processed DataFile */)}>
+                {#if (event.parse_status === 'Complete' || event.analysis_status === 'Ready') && event.files?.length}
+                  <button class="small" style="background:#059669; color:white; border:none;" on:click={() => openPlotForFile(event.files[0].id)}>
                     Plot Data
                   </button>
                 {/if}

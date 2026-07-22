@@ -1,4 +1,7 @@
 venv/
+.venv/
+backend/.venv/
+backend/cache/
 node_modules/
 __pycache__/
 *.pyc

@@ -1,9 +1,10 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import * as d3 from 'd3';
+  import { API_BASE } from './api.js';
 
   /** @type {string} */
-  export let apiBase = 'http://localhost:8000';
+  export let apiBase = API_BASE;
   /** @type {number | null} */
   export let fileId = null;
   /** @type {any[] | null} */

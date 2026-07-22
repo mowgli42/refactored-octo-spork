@@ -58,19 +58,28 @@ def test_file_registration_and_processing(client):
     
     assert event_data["parse_status"] == "Complete"
     
-    # 4. Verify H5 file
+    # 4. Verify Parquet cache
     assert len(event_data["files"]) == 1
+    file_id = event_data["files"][0]["id"]
     processed_path = event_data["files"][0]["processed_file_path"]
     assert processed_path is not None
-    assert processed_path.endswith(".h5")
+    assert processed_path.endswith(".parquet")
     assert os.path.exists(processed_path)
-    
-    # 5. Verify H5 content
-    df = pd.read_hdf(processed_path, key='flight_data')
+
+    # 5. Verify Parquet content
+    df = pd.read_parquet(processed_path, engine="pyarrow")
     assert not df.empty
-    assert "altitude" in df.columns
-    assert len(df) == 1000
-    
-    # Cleanup H5 file
+    assert "altitude_ft" in df.columns
+    assert len(df) == 8000
+
+    # 6. Verify data API for D3 plot
+    resp_data = client.get(f"/files/{file_id}/data?limit=100")
+    assert resp_data.status_code == 200
+    payload = resp_data.json()
+    assert payload["file_id"] == file_id
+    assert "timestamp" in payload["columns"]
+    assert len(payload["data"]) <= 100
+
+    # Cleanup Parquet cache
     if os.path.exists(processed_path):
         os.remove(processed_path)

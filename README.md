@@ -107,11 +107,45 @@ A limited **fixed-data browser demo** is ready (no uploads, view-only sample dat
 
 The demo is shareable instantly for stakeholders.
 
-## Quick Start & Roadmap
+## Quick Start
 
-See detailed setup in the file. Roadmap issues (#3–#8) cover uploads, plot enhancements, scanner, .mat support, etc.
+### Backend
 
-Contributions welcome!
+```bash
+cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt "pandas<3"
+cd .. && PYTHONPATH="$PWD" backend/.venv/bin/python -m uvicorn backend.main:app --reload
+```
+
+API: `http://localhost:8000` · Swagger: `http://localhost:8000/docs`
+
+### Frontend
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
+Dashboard: `http://localhost:5173`
+
+### Tests
+
+```bash
+PYTHONPATH="$PWD" backend/.venv/bin/python -m pytest backend/tests/ -q
+(cd frontend && npm run build)
+```
+
+### Sample data
+
+```bash
+backend/.venv/bin/python sample-data/generate_sample_flight_data.py
+```
+
+Produces CSV/JSON (and Parquet when pyarrow is available) under `sample-data/`.
+
+## Roadmap
+
+Tracked in **Beads** (`bd list`) and GitHub issues **#3–#8**: file upload, directory scanner, plot enhancements, `.mat` support, Vercel demo mode, auth/search/export.
+
+See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md), [BEADS.md](BEADS.md), and [openspec/specs/flight-test-data/spec.md](openspec/specs/flight-test-data/spec.md).
 
 ## Tech Stack
 - Backend: FastAPI + pandas/pyarrow (Parquet-first)
