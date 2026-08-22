@@ -1,82 +1,69 @@
 <script>
-  import { onMount } from 'svelte';
-  import FlightAnalysisWorkspace from './FlightAnalysisWorkspace.svelte';
+  import { onMount, createEventDispatcher } from 'svelte';
   import { generateDemoFlightSample, demoEvent } from './demoData.js';
-  import { API_BASE } from './api.js';
+
+  const dispatch = createEventDispatcher();
 
   let events = [];
   let loading = true;
   let error = null;
-  let showAnalysis = false;
   let analysisData = [];
 
-  const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true' || true; // force demo for Vercel slice
+  const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true' || true;
 
   onMount(() => {
     if (isDemoMode) {
       events = [demoEvent];
-      analysisData = generateDemoFlightSample(220);
+      analysisData = generateDemoFlightSample(240);
       loading = false;
     } else {
-      // Full mode would fetch from API — not used on Vercel demo
       loading = false;
       error = 'Backend not configured. Use local full stack or enable VITE_DEMO_MODE.';
     }
   });
 
-  function openAnalysis() {
-    if (!analysisData.length) {
-      analysisData = generateDemoFlightSample(220);
-    }
-    showAnalysis = true;
-  }
-
-  function closeAnalysis() {
-    showAnalysis = false;
+  function openAnalysis(event) {
+    if (!analysisData.length) analysisData = generateDemoFlightSample(240);
+    dispatch('analyze', { event, data: analysisData });
   }
 
   function getStatusColor(status) {
-    if (!status) return 'bg-gray-100';
+    if (!status) return 'muted';
     switch (String(status).toLowerCase()) {
       case 'complete':
       case 'ready':
-        return 'bg-green-100';
+        return 'ok';
       case 'processing':
-        return 'bg-blue-100';
+        return 'info';
       case 'error':
-        return 'bg-red-100';
+        return 'bad';
       default:
-        return 'bg-gray-100';
+        return 'muted';
     }
   }
 </script>
 
-<div class="container">
-  <div class="header">
+<div class="dash">
+  <header class="dash-header">
     <div>
-      <h1>Flight Test Analysis {isDemoMode ? '— Demo' : ''}</h1>
-      <p class="subtitle">
-        Time-aligned multi-panel workspace · Map track · Performance · Attitude · Propulsion · Subsystem states
-      </p>
+      <div class="kicker">Open Arsenal · Flight Test</div>
+      <h1>Events {isDemoMode ? '— Demo' : ''}</h1>
+      <p class="sub">Select an event to open the immersive analysis station</p>
     </div>
-    <button class="primary" on:click={openAnalysis}>
-      Open Analysis Workspace
-    </button>
-  </div>
+  </header>
 
   {#if isDemoMode}
-    <div class="demo-banner">
-      <strong>Demo mode</strong> — Fixed sample flight (Tail 652). Data import and uploads are disabled.
-      Use the analysis workspace to explore altitude, speed, throttle, gear, pumps, and hydraulics time-aligned.
+    <div class="banner">
+      <strong>Demo mode</strong> — Fixed sample flight (Tail 652). Import disabled. Click Analyze for full-screen debrief.
     </div>
   {/if}
 
   {#if loading}
-    <p>Loading…</p>
+    <p class="muted">Loading…</p>
   {:else if error}
     <p class="error">{error}</p>
   {:else}
-    <div class="table-wrap">
+    <div class="table-wrap panel">
       <table>
         <thead>
           <tr>
@@ -92,109 +79,57 @@
         <tbody>
           {#each events as event}
             <tr>
-              <td>{event.id}</td>
+              <td class="mono">{event.id}</td>
               <td>{event.name}</td>
-              <td>{new Date(event.date).toLocaleString()}</td>
+              <td class="mono">{new Date(event.date).toLocaleString()}</td>
               <td><span class="badge {getStatusColor(event.import_status)}">{event.import_status}</span></td>
               <td><span class="badge {getStatusColor(event.parse_status)}">{event.parse_status}</span></td>
               <td><span class="badge {getStatusColor(event.analysis_status)}">{event.analysis_status}</span></td>
               <td>
-                <button class="small primary" on:click={openAnalysis}>Analyze</button>
+                <button class="analyze" on:click={() => openAnalysis(event)}>Analyze</button>
               </td>
             </tr>
           {/each}
         </tbody>
       </table>
     </div>
-
-    <div class="hints">
-      <h3>What you can inspect in this demo</h3>
-      <ul>
-        <li><strong>Map</strong> — aircraft track colored by altitude</li>
-        <li><strong>Performance</strong> — altitude, airspeed, vertical speed</li>
-        <li><strong>Attitude</strong> — pitch, roll, angle of attack</li>
-        <li><strong>Propulsion</strong> — throttle %, engine RPM, fuel flow</li>
-        <li><strong>Subsystems</strong> — landing gear, fuel/oil pumps, hydraulics, master caution (digital traces)</li>
-        <li>Brush the bottom time axis to zoom a region; hover for a shared vertical cursor</li>
-      </ul>
-    </div>
-  {/if}
-
-  {#if showAnalysis}
-    <div class="modal-backdrop" on:click|self={closeAnalysis}>
-      <div class="modal large" on:click|stopPropagation>
-        <div class="modal-header">
-          <h2>Flight Test Analysis Workspace — Tail 652</h2>
-          <button class="secondary" on:click={closeAnalysis}>Close</button>
-        </div>
-        <FlightAnalysisWorkspace data={analysisData} />
-        <p class="modal-foot">
-          Brush bottom axis to zoom · Hover for time cursor · Discrete panel uses step traces for subsystem states
-        </p>
-      </div>
-    </div>
   {/if}
 </div>
 
 <style>
-  .container {
-    max-width: 1100px;
+  .dash {
+    max-width: 1000px;
     margin: 0 auto;
-    padding: 1.5rem;
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    color: #0f172a;
+    padding: 1.5rem 1.25rem;
+    height: 100%;
+    overflow: auto;
   }
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1rem;
-    margin-bottom: 1rem;
+  .kicker {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
   }
   h1 {
-    margin: 0 0 0.25rem;
-    font-size: 1.5rem;
+    margin: 0.2rem 0;
+    font-size: 1.45rem;
   }
-  .subtitle {
+  .sub {
     margin: 0;
-    color: #64748b;
+    color: var(--muted);
     font-size: 0.9rem;
   }
-  .demo-banner {
-    background: #f0fdf4;
-    border: 1px solid #86efac;
-    border-radius: 8px;
-    padding: 0.85rem 1rem;
-    margin-bottom: 1.25rem;
-    font-size: 0.9rem;
-  }
-  button {
-    border: none;
-    border-radius: 6px;
-    padding: 0.5rem 1rem;
-    font-weight: 500;
-    cursor: pointer;
-  }
-  button.primary {
-    background: #059669;
-    color: white;
-  }
-  button.primary:hover {
-    background: #047857;
-  }
-  button.secondary {
-    background: #e2e8f0;
-    color: #334155;
-  }
-  button.small {
-    padding: 0.3rem 0.7rem;
-    font-size: 0.85rem;
+  .banner {
+    margin: 1rem 0;
+    padding: 0.75rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--verify) 40%, var(--line));
+    background: color-mix(in srgb, var(--verify) 10%, var(--bg-panel));
+    border-radius: 4px;
+    font-size: 0.88rem;
   }
   .table-wrap {
-    overflow-x: auto;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
+    border-radius: 4px;
+    overflow: auto;
   }
   table {
     width: 100%;
@@ -202,92 +137,61 @@
   }
   th,
   td {
-    padding: 0.75rem 1rem;
+    padding: 0.7rem 0.9rem;
     text-align: left;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.9rem;
   }
   th {
-    background: #f8fafc;
-    font-size: 0.8rem;
-    color: #475569;
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: var(--bg-deep);
   }
   .badge {
     display: inline-block;
-    padding: 0.15rem 0.5rem;
+    padding: 0.12rem 0.45rem;
     border-radius: 999px;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 600;
   }
-  .bg-green-100 {
-    background: #dcfce7;
-    color: #166534;
+  .badge.ok {
+    background: rgba(93, 222, 160, 0.15);
+    color: var(--verify);
   }
-  .bg-blue-100 {
-    background: #dbeafe;
-    color: #1e40af;
+  .badge.info {
+    background: rgba(77, 163, 255, 0.15);
+    color: var(--collect);
   }
-  .bg-red-100 {
-    background: #fee2e2;
-    color: #991b1b;
+  .badge.bad {
+    background: rgba(255, 92, 108, 0.15);
+    color: var(--danger);
   }
-  .bg-gray-100 {
-    background: #f1f5f9;
-    color: #475569;
+  .badge.muted {
+    background: var(--bg-elevated);
+    color: var(--muted);
   }
-  .hints {
-    margin-top: 1.5rem;
-    padding: 1rem;
-    background: #f8fafc;
-    border-radius: 8px;
-    font-size: 0.9rem;
+  button.analyze {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
   }
-  .hints h3 {
-    margin: 0 0 0.5rem;
-    font-size: 1rem;
-  }
-  .hints ul {
-    margin: 0;
-    padding-left: 1.2rem;
+  button.analyze:hover {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
   }
   .error {
-    color: #b91c1c;
-    background: #fef2f2;
-    padding: 1rem;
-    border-radius: 6px;
+    color: var(--danger);
   }
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgb(15 23 42 / 0.55);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-    padding: 1rem;
+  .muted {
+    color: var(--muted);
   }
-  .modal.large {
-    background: white;
-    border-radius: 12px;
-    width: min(1100px, 98vw);
-    max-height: 94vh;
-    overflow: auto;
-    padding: 1rem 1.25rem 1.25rem;
-    box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-  }
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.75rem;
-  }
-  .modal-header h2 {
-    margin: 0;
-    font-size: 1.15rem;
-  }
-  .modal-foot {
-    margin: 0.75rem 0 0;
-    font-size: 0.8rem;
-    color: #64748b;
-    text-align: center;
+  .mono {
+    font-family: var(--font-mono);
   }
 </style>
