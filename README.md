@@ -1,27 +1,46 @@
 # Flight Test Data Management System
 
-**Parquet-native flight test analysis platform with time-aligned multi-panel D3 visualization.**
+**Parquet-native flight test analysis platform with an immersive, full-screen D3 analysis station.**
 
-Track flight test events, ingest telemetry (Parquet/CSV), and explore aircraft performance with a professional analysis workspace: map track, performance, attitude, propulsion, and subsystem digital states — all time-aligned.
+Track flight test events, ingest telemetry (Parquet/CSV), and debrief flights in a
+dedicated analysis station: interactive plot builder, saved analysis slides, timeline
+scrub with live aircraft state, and analyst-captured significant/anomalous events.
 
 ## Screenshots
 
-![Dashboard](screenshots/dashboard.png)
+Events dashboard (demo mode):
 
-![Dashboard with plot](screenshots/dashboard-with-plot.png)
+![Events dashboard](screenshots/dashboard.png)
 
-![D3 Flight Test Plot](screenshots/d3-plot.png)
+Loading sequence — associated data products resolve before the station opens:
 
-![Add File Modal](screenshots/add-file-modal.png)
+![Analysis loading sequence](screenshots/analysis-loading.png)
+
+Analysis station — D3 plot builder, analysis slides, live state readout:
+
+![Analysis station](screenshots/analysis-station.png)
+
+Step (digital) format with landing gear + throttle over a narrowed time snippet:
+
+![Plot builder step format](screenshots/plot-builder-step.png)
+
+Capturing a significant / anomalous event with severity and summary:
+
+![Capture event modal](screenshots/capture-event-modal.png)
+
+Captured anomaly recalled from the left panel, second analysis slide saved:
+
+![Significant event captured](screenshots/significant-event-captured.png)
 
 ## Architecture
 
-Svelte frontend ↔ FastAPI backend ↔ SQLite metadata + Parquet cache. The shareable Vercel demo is frontend-only (`VITE_DEMO_MODE`) with procedural sample data.
+Svelte frontend ↔ FastAPI backend ↔ SQLite metadata + Parquet cache. The shareable
+Vercel demo is frontend-only (`VITE_DEMO_MODE`) with procedural sample data.
 
 ```mermaid
 flowchart LR
   Eng[Flight test engineer]
-  UI[Svelte UI<br/>dashboard + analysis workspace]
+  UI[Svelte UI<br/>events dashboard + analysis station]
   API[FastAPI]
   DB[(SQLite events)]
   PQ[Parquet cache]
@@ -29,66 +48,49 @@ flowchart LR
   UI -->|REST / JSON| API
   API --> DB
   API --> PQ
-  UI -->|D3 panels| PQ
+  UI -->|D3 plot builder| PQ
 ```
 
-## Sequence — register, process, plot
+## Sequence — select event, debrief, capture findings
 
 ```mermaid
 sequenceDiagram
-  actor Engineer
-  participant UI as Svelte UI
-  participant API as FastAPI
-  participant Cache as Parquet cache
+  actor Analyst
+  participant Dash as Events dashboard
+  participant Station as Analysis station
+  participant D3 as D3 plot builder
 
-  Engineer->>UI: Register Parquet / CSV path
-  UI->>API: POST /files/
-  API->>Cache: load or process telemetry
-  API-->>UI: file ready
-  Engineer->>UI: Open analysis workspace
-  UI->>API: GET telemetry for time window
-  API->>Cache: read columns
-  API-->>UI: JSON series
-  UI->>UI: Map + performance + attitude + subsystems
+  Analyst->>Dash: Click Analyze on event
+  Dash->>Station: Loading sequence (data products, time index)
+  Station-->>Analyst: Full-screen debrief ready
+  Analyst->>D3: Toggle params · format · time snippet
+  D3-->>Station: Re-rendered plot (saved to active slide)
+  Analyst->>Station: Capture significant event (severity + summary)
+  Station-->>Analyst: Event listed for recall with exact plot config
 ```
 
-## Remaining / planned
+## Analysis Station (`AnalysisStation.svelte`)
 
-Tracked in Beads and GitHub **#3–#8** plus workspace issues **#12–#14**: multipart upload, watched-directory ingest, `.mat` support, plot export/limits, and OpenSpec deltas for the analysis workspace.
-
-See [openspec/specs/flight-test-data/](openspec/specs/flight-test-data/) and [openspec/changes/flight-test-analysis-workspace/](openspec/changes/flight-test-analysis-workspace/).
+- **Loading sequence** — selected event, associated data products, time index
+- **Plot builder** — grouped parameter chips (Performance / Attitude / Propulsion /
+  Subsystems), formats (multi-line, step/digital, area), time-snippet sliders
+- **Analysis slides** — named, saved plot configurations; "+ New slide" to branch
+- **Significant / anomalous events** — capture the current view with a severity
+  (note / anomaly / critical) and summary; recall restores the exact configuration
+- **Timeline** — click-to-scrub + play/pause with live state readout
+  (altitude, airspeed, throttle, RPM, gear, pumps, hydraulics, master caution)
 
 ## Vercel Demo (shareable, no backend)
 
 ✅ **Frontend-only demo** — fixed sample flight (Tail 652). **Data import is disabled.**
 
-Live: https://refactored-octo-spork-eosin.vercel.app — open **Analysis Workspace** from the dashboard.
-
-### What the demo shows
-- **Map** — lat/lon track colored by altitude
-- **Performance** — altitude, airspeed, vertical speed
-- **Attitude** — pitch, roll, AoA
-- **Propulsion** — throttle %, engine RPM, fuel flow
-- **Subsystem states** — landing gear, fuel pump, oil pump, hydraulics, master caution (digital / step traces)
-- Shared time brush + vertical cursor for correlation
+Live: https://refactored-octo-spork-eosin.vercel.app — click **Analyze** on the
+demo event to enter the analysis station.
 
 ### Deploy
 1. Import repo on [vercel.com/new](https://vercel.com/new)
 2. Set env `VITE_DEMO_MODE=true` (also set in `vercel.json`)
 3. Deploy — build command: `cd frontend && npm install && VITE_DEMO_MODE=true npm run build`
-
-## Analysis Workspace
-
-`FlightAnalysisWorkspace.svelte` renders a linked multi-panel view:
-
-```
-Map (track)
-Performance (altitude | airspeed | VS)
-Attitude (pitch | roll | AoA)
-Propulsion (throttle | RPM | fuel flow)
-Subsystems (gear | pumps | hyd | caution)  ← digital traces
-[ brush / zoom time axis ]
-```
 
 ## Sample data
 
@@ -96,7 +98,28 @@ Subsystems (gear | pumps | hyd | caution)  ← digital traces
 python sample-data/generate_sample_flight_data.py
 ```
 
-Produces CSV / JSON / Parquet with continuous + discrete columns. Demo uses `frontend/src/lib/demoData.js` so Vercel stays self-contained.
+Produces CSV / JSON / Parquet (10 Hz, 22 columns: performance, attitude, propulsion,
+and discrete subsystem states with gear transition, pump dropouts, and hydraulic
+fault windows). The Vercel demo uses `frontend/src/lib/demoData.js` (2 Hz procedural
+generator, same schema) so the deploy stays self-contained.
+
+## Verification
+
+Validated 2026-08-22 against `main@836ef6e`
+(see [openspec/changes/immersive-analysis-station/verification.md](openspec/changes/immersive-analysis-station/verification.md)):
+
+- Backend pytest suite: 3 passed
+- Vercel production build: succeeds
+- Both data generators: 4 data-set sizes each, schema / physical-range / discrete
+  use-case / round-trip checks all pass
+- Full station workflow: 6/6 steps pass headless with zero console errors, on the
+  local build **and** the live Vercel deployment
+
+```bash
+# workflow validation + screenshot capture
+(cd frontend && npm run build && npm run preview -- --port 4199) &
+UI_URL=http://localhost:4199 node scripts/capture-screenshots.mjs
+```
 
 ## Local full stack
 
@@ -113,7 +136,14 @@ cd frontend && npm install && npm run dev
 
 ## OpenSpec / Beads
 
-Spec-driven via OpenSpec + Gherkin + Beads. See `openspec/specs/flight-test-data/` and `openspec/changes/flight-test-analysis-workspace/`.
+Spec-driven via OpenSpec + Gherkin + Beads:
+
+- Specs: [openspec/specs/flight-test-data/](openspec/specs/flight-test-data/)
+- Latest change: [openspec/changes/immersive-analysis-station/](openspec/changes/immersive-analysis-station/)
+- Gherkin: [features/flight-test-data.feature](features/flight-test-data.feature),
+  [features/analysis-station.feature](features/analysis-station.feature)
+- Roadmap: Beads issues (`bd list`) — upload, watched-directory ingest, `.mat`
+  support, plot export/limits, station persistence + export
 
 ## Tech stack
 - Backend: FastAPI + pandas / pyarrow
