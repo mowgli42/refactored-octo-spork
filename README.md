@@ -29,6 +29,11 @@ Data plots (via analysis slide) — D3 plot builder, slides, live state readout:
 
 ![Analysis station](screenshots/analysis-station.png)
 
+Multiple time-aligned panels — subsystem drop-outs (step) above the corresponding
+instrumentation telemetry (line), sharing one time axis and scrub cursor:
+
+![Multi-panel subsystem analysis](screenshots/multi-panel-subsystem.png)
+
 Step (digital) format with landing gear + throttle over a narrowed time snippet:
 
 ![Plot builder step format](screenshots/plot-builder-step.png)
@@ -88,6 +93,11 @@ sequenceDiagram
 - **Plot builder (via slide)** — "Open data plots →" or the slide selector toggles
   into grouped parameter chips (Performance / Attitude / Propulsion / Subsystems)
   and formats (multi-line, step/digital, area)
+- **Multiple time-aligned panels per slide** — stack several plots with different
+  data (e.g. master caution / subsystem discretes above the corresponding
+  instrumentation telemetry) sharing one time snippet and scrub cursor; add,
+  select, and remove panels per slide. A pre-built "Subsystem drop-outs" slide
+  demonstrates the correlation workflow
 - **Time snippet** — start time entry (HH:MM:SS) with either a duration offset
   (secs / mins) or an explicit end time; draggable ▶/◀ markers on the timeline
   stay in sync with the entries; "Full flight" resets the window
@@ -159,7 +169,8 @@ cd frontend && npm install && npm run dev
 Spec-driven via OpenSpec + Gherkin + Beads:
 
 - Specs: [openspec/specs/flight-test-data/](openspec/specs/flight-test-data/)
-- Latest changes: [openspec/changes/map-overview-slide/](openspec/changes/map-overview-slide/),
+- Latest changes: [openspec/changes/multi-panel-plots/](openspec/changes/multi-panel-plots/),
+  [openspec/changes/map-overview-slide/](openspec/changes/map-overview-slide/),
   [openspec/changes/snippet-time-entry/](openspec/changes/snippet-time-entry/),
   [openspec/changes/immersive-analysis-station/](openspec/changes/immersive-analysis-station/)
 - Gherkin: [features/flight-test-data.feature](features/flight-test-data.feature),

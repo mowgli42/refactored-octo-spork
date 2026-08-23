@@ -78,30 +78,61 @@
   let currentIdx = 0;
   let playing = false;
   let playTimer = null;
-  let plotEl;
+  let panelEls = [];
   let timelineEl;
 
   // Analysis slides: the map overview (o-my-debrief layout) plus saved plot
-  // configurations. The station opens on the map before deep-diving into plots.
+  // configurations. Each plot slide is a stack of time-aligned panels so a
+  // subsystem drop-out (discretes) can sit directly above the corresponding
+  // instrumentation telemetry. The station opens on the map.
   let slides = [
     { id: 'map', name: 'Flight overview — map', type: 'map' },
     {
       id: 's1',
       name: 'Overview — performance',
       type: 'plot',
-      params: ['altitude_ft', 'airspeed_kt', 'vertical_speed_fpm'],
-      format: 'line',
       t0: 0,
-      t1: 1
+      t1: 1,
+      panels: [
+        {
+          id: 'p1',
+          params: ['altitude_ft', 'airspeed_kt', 'vertical_speed_fpm'],
+          format: 'line'
+        }
+      ]
+    },
+    {
+      id: 's2',
+      name: 'Subsystem drop-outs',
+      type: 'plot',
+      t0: 0,
+      t1: 1,
+      panels: [
+        {
+          id: 'p2',
+          params: ['master_caution', 'fuel_pump_on', 'oil_pump_on', 'hyd_system_ok'],
+          format: 'step'
+        },
+        {
+          id: 'p3',
+          params: ['oil_pressure_psi', 'fuel_flow_pph', 'engine_rpm'],
+          format: 'line'
+        }
+      ]
     }
   ];
   let activeSlideId = 'map';
 
-  // Current plot builder state (bound to active slide)
-  let selectedParams = ['altitude_ft', 'airspeed_kt', 'vertical_speed_fpm'];
-  let plotFormat = 'line';
+  // Current plot builder state (bound to active slide): stacked panels sharing
+  // one time snippet; the param/format controls edit the active panel.
+  let panels = clonePanels(slides[1].panels);
+  let activePanelId = panels[0].id;
   let rangeStart = 0; // fraction 0..1
   let rangeEnd = 1;
+
+  function clonePanels(ps) {
+    return ps.map((p) => ({ ...p, params: [...p.params] }));
+  }
   const MIN_GAP = 0.02; // minimum snippet width as fraction of flight
 
   // Time snippet definition mode: end time entry or duration offset from start
@@ -122,6 +153,8 @@
   $: snapshot = parsed[currentIdx] || null;
   $: progress = parsed.length > 1 ? currentIdx / (parsed.length - 1) : 0;
   $: activeSlide = slides.find((s) => s.id === activeSlideId) || slides[0];
+  $: activePanel = panels.find((p) => p.id === activePanelId) || panels[0];
+  $: totalSeries = panels.reduce((n, p) => n + p.params.length, 0);
   $: flightStartMs = parsed[0]?._date?.getTime() ?? 0;
   $: flightSpanMs = Math.max(1, (parsed[parsed.length - 1]?._date?.getTime() ?? 0) - flightStartMs);
   $: startLabel = parsed.length ? fracToHMS(rangeStart) : '';
@@ -199,7 +232,7 @@
     currentIdx = 0;
     phase = 'ready';
     await tick();
-    drawPlot();
+    drawPlots();
   }
 
   function sleep(ms) {
@@ -223,13 +256,13 @@
         return;
       }
       currentIdx += 1;
-      drawPlot();
+      drawPlots();
     }, 100);
   }
 
   function scrubTo(frac) {
     currentIdx = Math.round(frac * (parsed.length - 1));
-    drawPlot();
+    drawPlots();
   }
 
   function onTimelineClick(e) {
@@ -241,12 +274,12 @@
     activeSlideId = id;
     const s = slides.find((x) => x.id === id);
     if (!s || s.type === 'map') return;
-    selectedParams = [...s.params];
-    plotFormat = s.format;
+    panels = clonePanels(s.panels);
+    activePanelId = panels[0].id;
     rangeStart = s.t0;
     rangeEnd = s.t1;
-    await tick(); // plot container mounts when leaving the map view
-    drawPlot();
+    await tick(); // plot containers mount when leaving the map view
+    drawPlots();
   }
 
   function openPlots() {
@@ -260,8 +293,7 @@
       id,
       name: `Slide ${slides.filter((x) => x.type === 'plot').length + 1}`,
       type: 'plot',
-      params: [...selectedParams],
-      format: plotFormat,
+      panels: clonePanels(panels),
       t0: rangeStart,
       t1: rangeEnd
     };
@@ -276,8 +308,7 @@
       s.id === activeSlideId
         ? {
             ...s,
-            params: [...selectedParams],
-            format: plotFormat,
+            panels: clonePanels(panels),
             t0: rangeStart,
             t1: rangeEnd
           }
@@ -285,21 +316,48 @@
     );
   }
 
-  function toggleParam(key) {
-    if (selectedParams.includes(key)) {
-      if (selectedParams.length === 1) return;
-      selectedParams = selectedParams.filter((k) => k !== key);
-    } else {
-      selectedParams = [...selectedParams, key];
-    }
+  function selectPanel(id) {
+    activePanelId = id;
+  }
+
+  async function addPanel() {
+    const id = 'p' + Date.now();
+    panels = [...panels, { id, params: ['master_caution'], format: 'step' }];
+    activePanelId = id;
     saveSlideConfig();
-    drawPlot();
+    await tick();
+    drawPlots();
+  }
+
+  async function removePanel(id) {
+    if (panels.length === 1) return;
+    panels = panels.filter((p) => p.id !== id);
+    if (activePanelId === id) activePanelId = panels[0].id;
+    saveSlideConfig();
+    await tick();
+    drawPlots();
+  }
+
+  function toggleParam(key) {
+    const p = activePanel;
+    if (!p) return;
+    if (p.params.includes(key)) {
+      if (p.params.length === 1) return;
+      p.params = p.params.filter((k) => k !== key);
+    } else {
+      p.params = [...p.params, key];
+    }
+    panels = panels;
+    saveSlideConfig();
+    drawPlots();
   }
 
   function setFormat(fmt) {
-    plotFormat = fmt;
+    if (!activePanel) return;
+    activePanel.format = fmt;
+    panels = panels;
     saveSlideConfig();
-    drawPlot();
+    drawPlots();
   }
 
   function setRange(which, val) {
@@ -310,7 +368,7 @@
       rangeEnd = Math.max(v, rangeStart + MIN_GAP);
     }
     saveSlideConfig();
-    drawPlot();
+    drawPlots();
   }
 
   function fracToHMS(frac) {
@@ -341,7 +399,7 @@
       rangeStart = Math.min(f, rangeEnd - MIN_GAP);
     }
     saveSlideConfig();
-    drawPlot();
+    drawPlots();
   }
 
   function onEndEntry(e) {
@@ -352,7 +410,7 @@
     }
     rangeEnd = Math.max(f, rangeStart + MIN_GAP);
     saveSlideConfig();
-    drawPlot();
+    drawPlots();
   }
 
   function onDurationEntry(e) {
@@ -365,14 +423,14 @@
     const width = Math.max(MIN_GAP, (secs * 1000) / flightSpanMs);
     rangeEnd = Math.min(1, rangeStart + width);
     saveSlideConfig();
-    drawPlot();
+    drawPlots();
   }
 
   function resetSnippet() {
     rangeStart = 0;
     rangeEnd = 1;
     saveSlideConfig();
-    drawPlot();
+    drawPlots();
   }
 
   function startHandleDrag(which, e) {
@@ -410,8 +468,7 @@
       id,
       severity: captureSeverity,
       summary: captureSummary.trim(),
-      params: [...selectedParams],
-      format: plotFormat,
+      panels: clonePanels(panels),
       t0: rangeStart,
       t1: rangeEnd,
       t0Label: parsed[a]?._date?.toISOString().slice(11, 19) || '',
@@ -430,14 +487,14 @@
       const firstPlot = slides.find((s) => s.type === 'plot');
       if (firstPlot) activeSlideId = firstPlot.id;
     }
-    selectedParams = [...ev.params];
-    plotFormat = ev.format;
+    panels = clonePanels(ev.panels);
+    activePanelId = panels[0].id;
     rangeStart = ev.t0;
     rangeEnd = ev.t1;
     // also stamp onto active slide
     saveSlideConfig();
     await tick();
-    drawPlot();
+    drawPlots();
   }
 
   function deleteSig(id) {
@@ -454,22 +511,30 @@
     return v ? 'ON' : 'OFF';
   }
 
-  function drawPlot() {
-    if (!plotEl || !windowData.length) return;
-    d3.select(plotEl).selectAll('*').remove();
-    const w = plotEl.clientWidth || 700;
-    const h = Math.max(280, plotEl.clientHeight || 320);
-    const margin = { top: 28, right: 16, bottom: 36, left: 52 };
+  function drawPlots() {
+    panels.forEach((panel, i) => {
+      const el = panelEls[i];
+      if (el) drawPanel(el, panel, i === panels.length - 1);
+    });
+  }
+
+  function drawPanel(el, panel, showTimeAxis) {
+    if (!el || !windowData.length) return;
+    d3.select(el).selectAll('*').remove();
+    const w = el.clientWidth || 700;
+    const h = Math.max(140, el.clientHeight || 200);
+    const margin = { top: 24, right: 16, bottom: showTimeAxis ? 32 : 8, left: 52 };
     const innerW = w - margin.left - margin.right;
     const innerH = h - margin.top - margin.bottom;
 
     const svg = d3
-      .select(plotEl)
+      .select(el)
       .append('svg')
       .attr('width', w)
       .attr('height', h);
     const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
+    // shared time domain across all panels: the current snippet window
     const x = d3
       .scaleTime()
       .domain(d3.extent(windowData, (d) => d._date))
@@ -477,11 +542,14 @@
 
     g.append('g')
       .attr('transform', `translate(0,${innerH})`)
-      .call(d3.axisBottom(x).ticks(6).tickFormat(d3.timeFormat('%H:%M:%S')))
+      .call(
+        showTimeAxis
+          ? d3.axisBottom(x).ticks(6).tickFormat(d3.timeFormat('%H:%M:%S'))
+          : d3.axisBottom(x).ticks(6).tickFormat('')
+      )
       .attr('color', '#8fa3c1');
 
-    // Normalize each series to [0,1] for multi-param overlay clarity, with independent domains
-    selectedParams.forEach((key, i) => {
+    panel.params.forEach((key, i) => {
       const vals = windowData.map((d) => +d[key]).filter((v) => !isNaN(v));
       if (!vals.length) return;
       const y = d3.scaleLinear().domain(d3.extent(vals)).nice().range([innerH, 0]);
@@ -489,7 +557,7 @@
 
       if (i === 0) {
         g.append('g')
-          .call(d3.axisLeft(y).ticks(5))
+          .call(d3.axisLeft(y).ticks(4).tickFormat(d3.format('~g')))
           .attr('color', '#8fa3c1');
         g.append('g')
           .attr('opacity', 0.12)
@@ -497,9 +565,9 @@
       }
 
       const curve =
-        plotFormat === 'step' ? d3.curveStepAfter : d3.curveMonotoneX;
+        panel.format === 'step' ? d3.curveStepAfter : d3.curveMonotoneX;
 
-      if (plotFormat === 'area') {
+      if (panel.format === 'area') {
         const area = d3
           .area()
           .x((d) => x(d._date))
@@ -526,7 +594,7 @@
         .attr('d', line);
     });
 
-    // scrub marker if inside window
+    // shared scrub cursor across all panels, if inside window
     if (snapshot && snapshot._date >= x.domain()[0] && snapshot._date <= x.domain()[1]) {
       g.append('line')
         .attr('x1', x(snapshot._date))
@@ -539,13 +607,13 @@
     }
 
     // legend
-    selectedParams.forEach((key, i) => {
+    panel.params.forEach((key, i) => {
       const label = ALL_PARAMS.find((p) => p.key === key)?.label || key;
-      const lx = i * 120;
+      const lx = i * 118;
       svg
         .append('rect')
         .attr('x', margin.left + lx)
-        .attr('y', 8)
+        .attr('y', 6)
         .attr('width', 10)
         .attr('height', 10)
         .attr('rx', 2)
@@ -553,16 +621,16 @@
       svg
         .append('text')
         .attr('x', margin.left + lx + 14)
-        .attr('y', 17)
+        .attr('y', 15)
         .attr('fill', '#8fa3c1')
         .attr('font-size', 11)
         .text(label);
     });
   }
 
-  $: if (phase === 'ready' && plotEl) {
-    // reactive redraw when window / params change externally
-    drawPlot();
+  $: if (phase === 'ready' && panelEls.length) {
+    // reactive redraw when window / panels change externally
+    drawPlots();
   }
 </script>
 
@@ -664,7 +732,7 @@
                   <span class="sev">{ev.severity}</span>
                   <span class="sum">{ev.summary}</span>
                   <span class="meta mono"
-                    >{ev.t0Label}–{ev.t1Label} · {ev.params.length} params · {ev.format}</span
+                    >{ev.t0Label}–{ev.t1Label} · {ev.panels.length} panel{ev.panels.length > 1 ? 's' : ''} · {ev.panels.reduce((n, p) => n + p.params.length, 0)} series</span
                   >
                 </button>
                 <button type="button" class="del" title="Remove" on:click={() => deleteSig(ev.id)}>×</button>
@@ -698,6 +766,18 @@
           </div>
         {:else}
         <div class="builder-bar">
+          <div class="editing-row">
+            <span class="ctl-label">Editing</span>
+            {#each panels as p, i (p.id)}
+              <button
+                type="button"
+                class="chip"
+                class:on={p.id === activePanelId}
+                on:click={() => selectPanel(p.id)}>Panel {i + 1}</button
+              >
+            {/each}
+            <button type="button" class="chip add" on:click={addPanel}>+ Add panel</button>
+          </div>
           <div class="param-groups">
             {#each PARAM_GROUPS as group}
               <div class="pg">
@@ -707,7 +787,7 @@
                     <button
                       type="button"
                       class="chip"
-                      class:on={selectedParams.includes(p.key)}
+                      class:on={activePanel?.params.includes(p.key)}
                       on:click={() => toggleParam(p.key)}
                     >
                       {p.label}
@@ -724,7 +804,7 @@
                 <button
                   type="button"
                   class="chip"
-                  class:on={plotFormat === f.id}
+                  class:on={activePanel?.format === f.id}
                   on:click={() => setFormat(f.id)}>{f.label}</button
                 >
               {/each}
@@ -794,7 +874,31 @@
             </div>
           </div>
         </div>
-        <div class="plot" bind:this={plotEl}></div>
+        <div class="panels-stack">
+          {#each panels as panel, i (panel.id)}
+            <div class="ppanel" class:on={panel.id === activePanelId}>
+              <div class="ppanel-head">
+                <button
+                  type="button"
+                  class="ppanel-title mono"
+                  on:click={() => selectPanel(panel.id)}
+                  title="Edit this panel"
+                >
+                  Panel {i + 1} · {panel.params.length} series · {panel.format}
+                </button>
+                {#if panels.length > 1}
+                  <button
+                    type="button"
+                    class="del"
+                    title="Remove panel"
+                    on:click={() => removePanel(panel.id)}>×</button
+                  >
+                {/if}
+              </div>
+              <div class="ppanel-plot" bind:this={panelEls[i]}></div>
+            </div>
+          {/each}
+        </div>
         {/if}
       </section>
 
@@ -811,7 +915,9 @@
             >
               <span class="slide-name">{s.name}</span>
               <span class="mono muted"
-                >{s.type === 'map' ? 'ground track · overview' : `${s.params.length} series · ${s.format}`}</span
+                >{s.type === 'map'
+                  ? 'ground track · overview'
+                  : `${s.panels.length} panel${s.panels.length > 1 ? 's' : ''} · ${s.panels.reduce((n, p) => n + p.params.length, 0)} series`}</span
               >
             </button>
           {/each}
@@ -855,8 +961,9 @@
       <div class="modal panel">
         <h3>Capture significant / anomalous event</h3>
         <p class="hint">
-          Saves current D3 config: <strong>{selectedParams.join(', ')}</strong> · format
-          <strong>{plotFormat}</strong> · time window
+          Saves current view: <strong>{panels.length} panel{panels.length > 1 ? 's' : ''}</strong> ·
+          <strong>{totalSeries} series</strong>
+          ({panels.map((p) => p.params.length + ' ' + p.format).join(' + ')}) · time window
           <span class="mono">{startLabel}–{endLabel} ({Math.round(snippetSecs)}s)</span>
         </p>
         <label class="field">
@@ -1023,7 +1130,24 @@
   .unit { padding-right: 0.2rem; }
   .mode-toggle { display: flex; gap: 0.25rem; }
   .snippet-summary { font-size: 0.7rem; color: var(--collect); }
-  .plot { flex: 1; min-height: 240px; background: var(--bg-deep); border: 1px solid var(--line); border-radius: 4px; }
+  .editing-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin-bottom: 0.4rem; }
+  .editing-row .chip.add { border-style: dashed; }
+  .panels-stack { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.45rem; overflow: auto; }
+  .ppanel {
+    flex: 1; min-height: 150px; display: flex; flex-direction: column;
+    background: var(--bg-deep); border: 1px solid var(--line); border-radius: 4px;
+  }
+  .ppanel.on { border-color: var(--accent); }
+  .ppanel-head {
+    display: flex; align-items: center; gap: 0.25rem;
+    padding: 0.15rem 0.3rem; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  }
+  .ppanel-title {
+    flex: 1; text-align: left; background: transparent; border: none; cursor: pointer;
+    color: var(--muted); font-size: 0.68rem; padding: 0.15rem 0.25rem;
+  }
+  .ppanel.on .ppanel-title { color: var(--accent); }
+  .ppanel-plot { flex: 1; min-height: 120px; }
 
   .slide-list { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.75rem; }
   .slide {

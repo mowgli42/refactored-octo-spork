@@ -69,6 +69,21 @@ Feature: Immersive Flight Test Analysis Station
     Then the event appears in the Significant / anomalous panel
     And it records the time window, parameter count, and plot format
 
+  Scenario: Correlate a subsystem drop-out with instrumentation telemetry
+    Given the "Subsystem drop-outs" analysis slide
+    Then two stacked panels share the same time axis and scrub cursor
+    And the top panel shows master caution and pump/hydraulic discretes as step traces
+    And the bottom panel shows the corresponding oil pressure, fuel flow, and RPM telemetry
+    And a drop-out in the top panel aligns with the telemetry response below it
+
+  Scenario: Build a multi-panel analysis
+    Given a plot slide is open
+    When the analyst clicks "+ Add panel"
+    Then a new panel is stacked below with its own parameters and format
+    And the parameter and format chips edit whichever panel is active
+    And a panel can be removed as long as at least one remains
+    And capturing a significant event saves all panels for recall
+
   Scenario: Manage analysis slides
     Given the analysis station is ready
     When the analyst clicks "+ New slide"
