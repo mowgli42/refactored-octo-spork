@@ -70,11 +70,39 @@ async function main() {
 
   // 4. Toggle into the data plots via slide
   await page.getByRole('button', { name: 'Open data plots →' }).click();
-  await page.locator('.plot svg').waitFor({ timeout: 5000 });
+  await page.locator('.ppanel-plot svg').first().waitFor({ timeout: 5000 });
   if (!(await page.locator('.slide.on', { hasText: 'Overview — performance' }).count()))
     fail('plot slide not active after toggle');
   await page.screenshot({ path: path.join(outDir, 'analysis-station.png') });
-  console.log('4/7 plot slide toggle OK');
+
+  // 4b. multi-panel slide: subsystem discretes above corresponding telemetry
+  await page.getByRole('button', { name: 'Subsystem drop-outs' }).click();
+  await page.waitForTimeout(400);
+  if ((await page.locator('.ppanel').count()) !== 2)
+    fail('Subsystem drop-outs slide should have 2 stacked panels');
+  if ((await page.locator('.ppanel-plot svg').count()) !== 2)
+    fail('both panels should render a plot');
+  if (!(await page.locator('.ppanel-title', { hasText: '4 series · step' }).count()))
+    fail('discretes step panel missing');
+  if (!(await page.locator('.ppanel-title', { hasText: '3 series · line' }).count()))
+    fail('telemetry line panel missing');
+  await page.screenshot({ path: path.join(outDir, 'multi-panel-subsystem.png') });
+
+  // 4c. add a third panel, edit it, then remove it
+  await page.getByRole('button', { name: '+ Add panel' }).click();
+  await page.waitForTimeout(300);
+  if ((await page.locator('.ppanel').count()) !== 3) fail('add panel failed');
+  await page.getByRole('button', { name: 'Oil psi' }).click(); // edits new active panel
+  if (!(await page.locator('.ppanel-title', { hasText: '2 series · step' }).count()))
+    fail('param edit did not apply to the new panel');
+  await page.locator('.ppanel .del').last().click();
+  await page.waitForTimeout(300);
+  if ((await page.locator('.ppanel').count()) !== 2) fail('remove panel failed');
+
+  // back to the single-panel overview slide for the snippet checks
+  await page.getByRole('button', { name: 'Overview — performance' }).click();
+  await page.waitForTimeout(300);
+  console.log('4/7 plot slide toggle + multi-panel stack OK');
 
   // 5. Plot builder: params + step format + time snippet (entry, duration, end time, drag)
   await page.getByRole('button', { name: 'Throttle %' }).click();
@@ -154,12 +182,14 @@ async function main() {
   await page.screenshot({ path: path.join(outDir, 'map-event-marker.png') });
   // recalling the event from the left panel returns to the plots view
   await page.locator('.sig-btn', { hasText: 'Gear extension' }).click();
-  await page.locator('.plot svg').waitFor({ timeout: 5000 });
+  await page.locator('.ppanel-plot svg').first().waitFor({ timeout: 5000 });
   console.log('6/7 significant event capture + map marker OK');
 
-  // 6. New analysis slide, then back to dashboard
+  // 7. New analysis slide, then back to dashboard
+  const slideCountBefore = await page.locator('.slide-list .slide').count();
   await page.getByRole('button', { name: '+ New slide' }).click();
-  if (!(await page.locator('.slide', { hasText: 'Slide 2' }).count()))
+  await page.waitForTimeout(300);
+  if ((await page.locator('.slide-list .slide').count()) !== slideCountBefore + 1)
     fail('new analysis slide not created');
   await page.screenshot({ path: path.join(outDir, 'significant-event-captured.png') });
   await page.getByRole('button', { name: '← Events' }).click();
