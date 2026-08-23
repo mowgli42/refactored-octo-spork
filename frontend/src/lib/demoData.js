@@ -29,9 +29,12 @@ export function generateDemoFlightSample(numPoints = 200) {
     const aoa = Math.max(0, Math.min(12, 3 + 2 * Math.sin(t * 0.5) + (Math.random() - 0.5)));
     const g = Math.max(0.6, Math.min(2.6, 1 + 0.4 * Math.sin(t * 1.5) + (Math.random() - 0.5) * 0.1));
 
-    // Position
-    lat += (Math.random() - 0.5) * 0.00006;
-    lon += (Math.random() - 0.5) * 0.0001;
+    // Position — ground track integrated from heading and airspeed so the
+    // map overview shows a real flight path (full heading sweep ≈ circuit)
+    const hdgRad = (heading * Math.PI) / 180;
+    const distNm = (airspeed * dtMs) / 3600000;
+    lat += (distNm / 60) * Math.cos(hdgRad);
+    lon += ((distNm / 60) * Math.sin(hdgRad)) / Math.cos((lat * Math.PI) / 180);
 
     // Propulsion
     const throttle = Math.max(18, Math.min(95, 55 + 22 * Math.sin(t * 0.2) + (Math.random() - 0.5) * 4));

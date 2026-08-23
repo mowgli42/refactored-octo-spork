@@ -9,8 +9,28 @@ Feature: Immersive Flight Test Analysis Station
   Scenario: Enter the analysis station through the loading sequence
     When the user clicks Analyze on the demo event
     Then a loading screen lists the associated data products as they load
-    And the full-screen analysis station opens with a rendered D3 plot
-    And the default slide "Overview — performance" is active
+    And the full-screen analysis station opens on the flight overview map
+    And the default slide "Flight overview — map" is active
+
+  Scenario: Flight overview map before deep-diving into plots
+    Given the analysis station has opened on the map view
+    Then the map shows the ground track populated from the location data
+    And a heading-rotated aircraft marker sits at the current timeline position
+    And an overview strip shows duration, max altitude, max speed, max g,
+      track distance, and caution time
+    And scrubbing the timeline extends the flown-track trail on the map
+
+  Scenario: Toggle into the data plots via analysis slide
+    Given the flight overview map is shown
+    When the analyst clicks "Open data plots" or selects a plot slide
+    Then the center panel switches to the interactive D3 plot builder
+    And selecting the "Flight overview — map" slide returns to the map
+
+  Scenario: Captured events appear on the overview map
+    Given a captured significant or anomalous event
+    When the analyst returns to the flight overview map
+    Then the event appears as a severity-colored marker at its position on the track
+    And clicking the marker or the event recalls its plot configuration
 
   Scenario: Build a step plot of a gear transient
     Given the analysis station is ready

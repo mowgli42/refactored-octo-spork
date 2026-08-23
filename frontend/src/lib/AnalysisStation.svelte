@@ -2,6 +2,7 @@
   import { onMount, onDestroy, createEventDispatcher, tick } from 'svelte';
   import * as d3 from 'd3';
   import { generateDemoFlightSample } from './demoData.js';
+  import FlightTrackMap from './FlightTrackMap.svelte';
 
   /** @type {{ id: number, name: string, date: string, files?: any[] }} */
   export let event = null;
@@ -80,18 +81,21 @@
   let plotEl;
   let timelineEl;
 
-  // Analysis slides (saved plot configurations)
+  // Analysis slides: the map overview (o-my-debrief layout) plus saved plot
+  // configurations. The station opens on the map before deep-diving into plots.
   let slides = [
+    { id: 'map', name: 'Flight overview — map', type: 'map' },
     {
       id: 's1',
       name: 'Overview — performance',
+      type: 'plot',
       params: ['altitude_ft', 'airspeed_kt', 'vertical_speed_fpm'],
       format: 'line',
       t0: 0,
       t1: 1
     }
   ];
-  let activeSlideId = 's1';
+  let activeSlideId = 'map';
 
   // Current plot builder state (bound to active slide)
   let selectedParams = ['altitude_ft', 'airspeed_kt', 'vertical_speed_fpm'];
@@ -124,6 +128,34 @@
   $: endLabel = parsed.length ? fracToHMS(rangeEnd) : '';
   $: snippetSecs = ((rangeEnd - rangeStart) * flightSpanMs) / 1000;
   $: durationDisplay = durationUnit === 'min' ? +(snippetSecs / 60).toFixed(1) : Math.round(snippetSecs);
+  $: isMapView = activeSlide?.type === 'map';
+
+  // Flight overview stats for the map slide
+  $: overview = parsed.length
+    ? {
+        duration: `${Math.round(flightSpanMs / 1000)}s`,
+        maxAlt: Math.round(Math.max(...parsed.map((r) => r.altitude_ft))),
+        maxSpd: Math.round(Math.max(...parsed.map((r) => r.airspeed_kt))),
+        maxG: Math.max(...parsed.map((r) => r.g_force)).toFixed(2),
+        trackNm: trackDistanceNm(parsed).toFixed(1),
+        cautionSecs: Math.round(
+          (parsed.filter((r) => r.master_caution).length / parsed.length) * (flightSpanMs / 1000)
+        )
+      }
+    : null;
+
+  function trackDistanceNm(rows) {
+    let nm = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const dLat = (rows[i].latitude - rows[i - 1].latitude) * 60;
+      const dLon =
+        (rows[i].longitude - rows[i - 1].longitude) *
+        60 *
+        Math.cos((rows[i].latitude * Math.PI) / 180);
+      nm += Math.sqrt(dLat * dLat + dLon * dLon);
+    }
+    return nm;
+  }
   $: windowData = (() => {
     if (!parsed.length) return [];
     const a = Math.floor(rangeStart * (parsed.length - 1));
@@ -205,32 +237,41 @@
     scrubTo(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
   }
 
-  function selectSlide(id) {
+  async function selectSlide(id) {
     activeSlideId = id;
     const s = slides.find((x) => x.id === id);
-    if (!s) return;
+    if (!s || s.type === 'map') return;
     selectedParams = [...s.params];
     plotFormat = s.format;
     rangeStart = s.t0;
     rangeEnd = s.t1;
+    await tick(); // plot container mounts when leaving the map view
     drawPlot();
+  }
+
+  function openPlots() {
+    const firstPlot = slides.find((s) => s.type === 'plot');
+    if (firstPlot) selectSlide(firstPlot.id);
   }
 
   function newSlide() {
     const id = 's' + Date.now();
     const s = {
       id,
-      name: `Slide ${slides.length + 1}`,
+      name: `Slide ${slides.filter((x) => x.type === 'plot').length + 1}`,
+      type: 'plot',
       params: [...selectedParams],
       format: plotFormat,
       t0: rangeStart,
       t1: rangeEnd
     };
     slides = [...slides, s];
-    activeSlideId = id;
+    selectSlide(id);
   }
 
   function saveSlideConfig() {
+    // the map overview slide holds no plot configuration
+    if (slides.find((s) => s.id === activeSlideId)?.type === 'map') return;
     slides = slides.map((s) =>
       s.id === activeSlideId
         ? {
@@ -382,14 +423,20 @@
     showCapture = false;
   }
 
-  function selectSig(ev) {
+  async function selectSig(ev) {
     selectedSigId = ev.id;
+    // recalling a captured event opens the plots view
+    if (isMapView) {
+      const firstPlot = slides.find((s) => s.type === 'plot');
+      if (firstPlot) activeSlideId = firstPlot.id;
+    }
     selectedParams = [...ev.params];
     plotFormat = ev.format;
     rangeStart = ev.t0;
     rangeEnd = ev.t1;
     // also stamp onto active slide
     saveSlideConfig();
+    await tick();
     drawPlot();
   }
 
@@ -627,8 +674,29 @@
         {/if}
       </aside>
 
-      <!-- CENTER: interactive D3 plot builder -->
+      <!-- CENTER: flight overview map (default) or interactive D3 plot builder -->
       <section class="center panel">
+        {#if isMapView}
+          <div class="overview-bar">
+            {#if overview}
+              <div class="stat"><span class="ov-label">Duration</span><span class="ov-value mono">{overview.duration}</span></div>
+              <div class="stat"><span class="ov-label">Max alt</span><span class="ov-value mono">{overview.maxAlt} ft</span></div>
+              <div class="stat"><span class="ov-label">Max speed</span><span class="ov-value mono">{overview.maxSpd} kt</span></div>
+              <div class="stat"><span class="ov-label">Max g</span><span class="ov-value mono">{overview.maxG}</span></div>
+              <div class="stat"><span class="ov-label">Track</span><span class="ov-value mono">{overview.trackNm} nm</span></div>
+              <div class="stat"><span class="ov-label">Caution</span><span class="ov-value mono" class:danger={overview.cautionSecs > 0}>{overview.cautionSecs}s</span></div>
+            {/if}
+            <button type="button" class="chip open-plots" on:click={openPlots}>Open data plots →</button>
+          </div>
+          <div class="map-wrap">
+            <FlightTrackMap
+              track={parsed}
+              {currentIdx}
+              {sigEvents}
+              on:selectEvent={(e) => selectSig(e.detail)}
+            />
+          </div>
+        {:else}
         <div class="builder-bar">
           <div class="param-groups">
             {#each PARAM_GROUPS as group}
@@ -727,6 +795,7 @@
           </div>
         </div>
         <div class="plot" bind:this={plotEl}></div>
+        {/if}
       </section>
 
       <!-- RIGHT: analysis slide selector + status -->
@@ -741,7 +810,9 @@
               on:click={() => selectSlide(s.id)}
             >
               <span class="slide-name">{s.name}</span>
-              <span class="mono muted">{s.params.length} series · {s.format}</span>
+              <span class="mono muted"
+                >{s.type === 'map' ? 'ground track · overview' : `${s.params.length} series · ${s.format}`}</span
+              >
             </button>
           {/each}
           <button type="button" class="slide add" on:click={newSlide}>+ New slide</button>
@@ -917,6 +988,17 @@
   .del:hover { color: var(--danger); border-color: var(--danger); }
 
   .center { border-radius: 4px; padding: 0.55rem 0.65rem 0.65rem; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .overview-bar {
+    flex-shrink: 0; display: flex; flex-wrap: wrap; align-items: center;
+    gap: 0.4rem 1.1rem; margin-bottom: 0.5rem; padding: 0.35rem 0.5rem;
+    background: var(--bg-deep); border: 1px solid var(--line); border-radius: 4px;
+  }
+  .stat { display: flex; flex-direction: column; gap: 0.05rem; }
+  .ov-label { font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .ov-value { font-size: 0.85rem; font-weight: 600; }
+  .ov-value.danger { color: var(--danger); }
+  .open-plots { margin-left: auto; }
+  .map-wrap { flex: 1; min-height: 0; display: flex; }
   .builder-bar { flex-shrink: 0; margin-bottom: 0.5rem; }
   .param-groups { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.45rem; }
   .pg { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem; }

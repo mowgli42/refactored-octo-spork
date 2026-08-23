@@ -31,9 +31,11 @@ def generate_flight_test_data(num_points: int = 8000, output_dir: str = ".") -> 
     aoa = np.clip(3.2 + 2.2 * np.sin(t * 0.55) + np.random.randn(num_points) * 0.35, 0, 13)
     g = np.clip(1.0 + 0.45 * np.sin(t * 1.7) + np.random.randn(num_points) * 0.07, 0.55, 2.9)
 
-    # --- Position (simple integrated track) ---
-    lat = 34.05 + np.cumsum(np.random.randn(num_points) * 0.00004)
-    lon = -118.25 + np.cumsum(np.random.randn(num_points) * 0.00007)
+    # --- Position (ground track integrated from heading and airspeed) ---
+    hdg_rad = np.deg2rad(heading)
+    dist_nm = airspeed * dt / 3600.0
+    lat = 34.05 + np.cumsum((dist_nm / 60.0) * np.cos(hdg_rad))
+    lon = -118.25 + np.cumsum((dist_nm / 60.0) * np.sin(hdg_rad) / np.cos(np.deg2rad(34.05)))
 
     # --- Propulsion (throttle-driven) ---
     throttle = 55 + 25 * np.sin(t * 0.22) + np.random.randn(num_points) * 2.5
