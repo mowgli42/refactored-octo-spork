@@ -20,6 +20,27 @@ Feature: Immersive Flight Test Analysis Station
     Then the plot re-renders as step traces for the selected window
     And the enabled parameter chips are highlighted
 
+  Scenario: Define the time snippet by start time and duration offset
+    Given the analysis station is ready
+    When the analyst enters a start time of "14:31:00"
+    And chooses Duration mode with an offset of 30 seconds
+    Then the snippet summary shows "14:31:00–14:31:30"
+    And the plot re-renders to that window
+    And switching the unit to minutes preserves the same window definition
+
+  Scenario: Define the time snippet by explicit end time
+    Given a snippet start time of "14:31:00"
+    When the analyst switches to End time mode
+    And enters an end time of "14:31:50"
+    Then the snippet summary shows "14:31:00–14:31:50"
+    And the end time may not precede the start time
+
+  Scenario: Adjust the snippet with timeline markers
+    Given a defined time snippet
+    When the analyst drags the start or end marker on the timeline
+    Then the snippet window and time entries update live while dragging
+    And "Full flight" resets the snippet to the whole recording
+
   Scenario: Capture a significant or anomalous event
     Given a configured plot showing a transient of interest
     When the analyst clicks "Capture significant event"

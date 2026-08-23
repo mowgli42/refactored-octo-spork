@@ -73,7 +73,10 @@ sequenceDiagram
 
 - **Loading sequence** — selected event, associated data products, time index
 - **Plot builder** — grouped parameter chips (Performance / Attitude / Propulsion /
-  Subsystems), formats (multi-line, step/digital, area), time-snippet sliders
+  Subsystems), formats (multi-line, step/digital, area)
+- **Time snippet** — start time entry (HH:MM:SS) with either a duration offset
+  (secs / mins) or an explicit end time; draggable ▶/◀ markers on the timeline
+  stay in sync with the entries; "Full flight" resets the window
 - **Analysis slides** — named, saved plot configurations; "+ New slide" to branch
 - **Significant / anomalous events** — capture the current view with a severity
   (note / anomaly / critical) and summary; recall restores the exact configuration
@@ -139,7 +142,8 @@ cd frontend && npm install && npm run dev
 Spec-driven via OpenSpec + Gherkin + Beads:
 
 - Specs: [openspec/specs/flight-test-data/](openspec/specs/flight-test-data/)
-- Latest change: [openspec/changes/immersive-analysis-station/](openspec/changes/immersive-analysis-station/)
+- Latest changes: [openspec/changes/snippet-time-entry/](openspec/changes/snippet-time-entry/),
+  [openspec/changes/immersive-analysis-station/](openspec/changes/immersive-analysis-station/)
 - Gherkin: [features/flight-test-data.feature](features/flight-test-data.feature),
   [features/analysis-station.feature](features/analysis-station.feature)
 - Roadmap: Beads issues (`bd list`) — upload, watched-directory ingest, `.mat`
