@@ -549,50 +549,96 @@
       )
       .attr('color', '#8fa3c1');
 
-    panel.params.forEach((key, i) => {
-      const vals = windowData.map((d) => +d[key]).filter((v) => !isNaN(v));
-      if (!vals.length) return;
-      const y = d3.scaleLinear().domain(d3.extent(vals)).nice().range([innerH, 0]);
-      const color = COLORS[i % COLORS.length];
+    if (panel.format === 'step') {
+      // Digital lanes: each parameter gets its own stacked band (logic-analyzer
+      // style) so discretes like pumps / caution never draw on top of each other.
+      const laneH = innerH / panel.params.length;
+      panel.params.forEach((key, i) => {
+        const vals = windowData.map((d) => +d[key]).filter((v) => !isNaN(v));
+        if (!vals.length) return;
+        const ext = d3.extent(vals);
+        // constant series (e.g. pump stays ON in this window) still need a band
+        const dom = ext[0] === ext[1] ? [ext[0] - 1, ext[1] + 1] : ext;
+        const y = d3
+          .scaleLinear()
+          .domain(dom)
+          .range([i * laneH + laneH * 0.9, i * laneH + laneH * 0.42]);
+        const color = COLORS[i % COLORS.length];
 
-      if (i === 0) {
-        g.append('g')
-          .call(d3.axisLeft(y).ticks(4).tickFormat(d3.format('~g')))
-          .attr('color', '#8fa3c1');
-        g.append('g')
-          .attr('opacity', 0.12)
-          .call(d3.axisLeft(y).tickSize(-innerW).tickFormat(''));
-      }
+        if (i > 0) {
+          g.append('line')
+            .attr('x1', 0)
+            .attr('x2', innerW)
+            .attr('y1', i * laneH)
+            .attr('y2', i * laneH)
+            .attr('stroke', '#2a3b5c')
+            .attr('opacity', 0.6);
+        }
 
-      const curve =
-        panel.format === 'step' ? d3.curveStepAfter : d3.curveMonotoneX;
-
-      if (panel.format === 'area') {
-        const area = d3
-          .area()
+        const line = d3
+          .line()
           .x((d) => x(d._date))
-          .y0(innerH)
-          .y1((d) => y(+d[key]))
-          .curve(curve);
+          .y((d) => y(+d[key]))
+          .curve(d3.curveStepAfter);
         g.append('path')
           .datum(windowData)
-          .attr('fill', color)
-          .attr('opacity', 0.25)
-          .attr('d', area);
-      }
+          .attr('fill', 'none')
+          .attr('stroke', color)
+          .attr('stroke-width', 2)
+          .attr('d', line);
 
-      const line = d3
-        .line()
-        .x((d) => x(d._date))
-        .y((d) => y(+d[key]))
-        .curve(curve);
-      g.append('path')
-        .datum(windowData)
-        .attr('fill', 'none')
-        .attr('stroke', color)
-        .attr('stroke-width', 2)
-        .attr('d', line);
-    });
+        const label = ALL_PARAMS.find((p) => p.key === key)?.label || key;
+        g.append('text')
+          .attr('x', 4)
+          .attr('y', i * laneH + 12)
+          .attr('fill', color)
+          .attr('font-size', 10)
+          .attr('font-weight', 600)
+          .text(label);
+      });
+    } else {
+      panel.params.forEach((key, i) => {
+        const vals = windowData.map((d) => +d[key]).filter((v) => !isNaN(v));
+        if (!vals.length) return;
+        const y = d3.scaleLinear().domain(d3.extent(vals)).nice().range([innerH, 0]);
+        const color = COLORS[i % COLORS.length];
+
+        if (i === 0) {
+          g.append('g')
+            .call(d3.axisLeft(y).ticks(4).tickFormat(d3.format('~g')))
+            .attr('color', '#8fa3c1');
+          g.append('g')
+            .attr('opacity', 0.12)
+            .call(d3.axisLeft(y).tickSize(-innerW).tickFormat(''));
+        }
+
+        if (panel.format === 'area') {
+          const area = d3
+            .area()
+            .x((d) => x(d._date))
+            .y0(innerH)
+            .y1((d) => y(+d[key]))
+            .curve(d3.curveMonotoneX);
+          g.append('path')
+            .datum(windowData)
+            .attr('fill', color)
+            .attr('opacity', 0.25)
+            .attr('d', area);
+        }
+
+        const line = d3
+          .line()
+          .x((d) => x(d._date))
+          .y((d) => y(+d[key]))
+          .curve(d3.curveMonotoneX);
+        g.append('path')
+          .datum(windowData)
+          .attr('fill', 'none')
+          .attr('stroke', color)
+          .attr('stroke-width', 2)
+          .attr('d', line);
+      });
+    }
 
     // shared scrub cursor across all panels, if inside window
     if (snapshot && snapshot._date >= x.domain()[0] && snapshot._date <= x.domain()[1]) {
@@ -606,7 +652,8 @@
         .attr('stroke-width', 1.2);
     }
 
-    // legend
+    // legend (step lanes carry their own colored labels)
+    if (panel.format === 'step') return;
     panel.params.forEach((key, i) => {
       const label = ALL_PARAMS.find((p) => p.key === key)?.label || key;
       const lx = i * 118;

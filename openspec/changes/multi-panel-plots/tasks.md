@@ -12,6 +12,9 @@
 - [x] Capture / recall of significant events stores the full panel stack
 - [x] Slide and event metadata show panel + series counts
 - [x] Clean y-axis tick formatting (`~g`)
+- [x] Step (digital) format renders each parameter in its own stacked lane with
+      a colored in-lane label and lane separators (no overlapping 0/1 traces);
+      constant-in-window series still get a visible band
 
 ## Verified
 

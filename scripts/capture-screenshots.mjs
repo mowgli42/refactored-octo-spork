@@ -84,6 +84,12 @@ async function main() {
     fail('both panels should render a plot');
   if (!(await page.locator('.ppanel-title', { hasText: '4 series · step' }).count()))
     fail('discretes step panel missing');
+  // each discrete renders in its own lane with an in-lane label
+  const laneLabels = await page
+    .locator('.ppanel-plot svg text')
+    .filter({ hasText: /Master caution|Fuel pump|Oil pump|Hydraulics/ })
+    .count();
+  if (laneLabels < 4) fail(`expected 4 discrete lane labels, found ${laneLabels}`);
   if (!(await page.locator('.ppanel-title', { hasText: '3 series · line' }).count()))
     fail('telemetry line panel missing');
   await page.screenshot({ path: path.join(outDir, 'multi-panel-subsystem.png') });
