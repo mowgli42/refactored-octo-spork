@@ -63,18 +63,65 @@ async function main() {
   await page.screenshot({ path: path.join(outDir, 'analysis-station.png') });
   console.log('3/6 analysis station OK');
 
-  // 4. Plot builder: add propulsion params, switch to step format, narrow snippet
+  // 4. Plot builder: params + step format + time snippet (entry, duration, end time, drag)
   await page.getByRole('button', { name: 'Throttle %' }).click();
   await page.getByRole('button', { name: 'Landing gear' }).click();
   await page.getByRole('button', { name: 'Step (digital)' }).click();
-  const sliders = page.locator('.range input[type="range"]');
-  await sliders.nth(0).fill('0.55');
-  await sliders.nth(1).fill('0.95');
-  await page.waitForTimeout(400);
   if (!(await page.locator('.chip.on', { hasText: 'Throttle %' }).count()))
     fail('param toggle did not stick');
+
+  const summary = page.locator('.snippet-summary');
+
+  // 4a. start time entry + duration offset (secs)
+  const startIn = page.locator('.snippet .time-in').first();
+  await startIn.fill('14:31:00');
+  await startIn.press('Enter');
+  const durIn = page.locator('.snippet .dur-in');
+  await durIn.fill('30');
+  await durIn.press('Enter');
+  await page.waitForTimeout(300);
+  let text = await summary.textContent();
+  if (!text.includes('14:31:00–14:31:30'))
+    fail(`duration snippet wrong: "${text}" (expected 14:31:00–14:31:30)`);
+  console.log('4a start entry + 30 sec duration OK');
+
+  // 4b. switch duration unit to minutes
+  await page.locator('.snippet .unit').selectOption('min');
+  await durIn.fill('0.75');
+  await durIn.press('Enter');
+  await page.waitForTimeout(300);
+  text = await summary.textContent();
+  if (!text.includes('14:31:00–14:31:45'))
+    fail(`minute-duration snippet wrong: "${text}" (expected 14:31:00–14:31:45)`);
+  console.log('4b duration in minutes OK');
+
+  // 4c. explicit end-time entry
+  await page.getByRole('button', { name: 'End time', exact: true }).click();
+  const endIn = page.locator('.snippet .time-in').nth(1);
+  await endIn.fill('14:31:50');
+  await endIn.press('Enter');
+  await page.waitForTimeout(300);
+  text = await summary.textContent();
+  if (!text.includes('14:31:00–14:31:50'))
+    fail(`end-time snippet wrong: "${text}" (expected 14:31:00–14:31:50)`);
+  console.log('4c end-time entry OK');
+
+  // 4d. drag the end handle on the timeline
+  const track = await page.locator('.timeline-track').boundingBox();
+  const endHandle = await page.locator('.timeline-handle.end').boundingBox();
+  if (!track || !endHandle) fail('timeline snippet handles missing');
+  await page.mouse.move(endHandle.x + endHandle.width / 2, endHandle.y + endHandle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(track.x + track.width * 0.7, endHandle.y + endHandle.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  text = await summary.textContent();
+  if (text.includes('14:31:00–14:31:50'))
+    fail(`dragging end handle had no effect: "${text}"`);
+  console.log(`4d timeline end-handle drag OK (${text.trim()})`);
+
   await page.screenshot({ path: path.join(outDir, 'plot-builder-step.png') });
-  console.log('4/6 plot builder (params + step format + time snippet) OK');
+  console.log('4/6 plot builder (params + step format + time snippet entry/drag) OK');
 
   // 5. Capture a significant / anomalous event
   await page.getByRole('button', { name: 'Capture significant event' }).click();

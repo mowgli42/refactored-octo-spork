@@ -98,6 +98,12 @@
   let plotFormat = 'line';
   let rangeStart = 0; // fraction 0..1
   let rangeEnd = 1;
+  const MIN_GAP = 0.02; // minimum snippet width as fraction of flight
+
+  // Time snippet definition mode: end time entry or duration offset from start
+  let snippetMode = 'duration'; // duration | end
+  let durationUnit = 'sec'; // sec | min
+  let draggingHandle = null; // 'start' | 'end' | null
 
   // Significant / anomalous events created by analyst
   let sigEvents = [];
@@ -112,6 +118,12 @@
   $: snapshot = parsed[currentIdx] || null;
   $: progress = parsed.length > 1 ? currentIdx / (parsed.length - 1) : 0;
   $: activeSlide = slides.find((s) => s.id === activeSlideId) || slides[0];
+  $: flightStartMs = parsed[0]?._date?.getTime() ?? 0;
+  $: flightSpanMs = Math.max(1, (parsed[parsed.length - 1]?._date?.getTime() ?? 0) - flightStartMs);
+  $: startLabel = parsed.length ? fracToHMS(rangeStart) : '';
+  $: endLabel = parsed.length ? fracToHMS(rangeEnd) : '';
+  $: snippetSecs = ((rangeEnd - rangeStart) * flightSpanMs) / 1000;
+  $: durationDisplay = durationUnit === 'min' ? +(snippetSecs / 60).toFixed(1) : Math.round(snippetSecs);
   $: windowData = (() => {
     if (!parsed.length) return [];
     const a = Math.floor(rangeStart * (parsed.length - 1));
@@ -125,6 +137,8 @@
 
   onDestroy(() => {
     if (playTimer) clearInterval(playTimer);
+    window.removeEventListener('pointermove', onHandleMove);
+    window.removeEventListener('pointerup', endHandleDrag);
   });
 
   async function runLoadingSequence() {
@@ -250,12 +264,94 @@
   function setRange(which, val) {
     const v = Math.max(0, Math.min(1, +val));
     if (which === 'start') {
-      rangeStart = Math.min(v, rangeEnd - 0.02);
+      rangeStart = Math.min(v, rangeEnd - MIN_GAP);
     } else {
-      rangeEnd = Math.max(v, rangeStart + 0.02);
+      rangeEnd = Math.max(v, rangeStart + MIN_GAP);
     }
     saveSlideConfig();
     drawPlot();
+  }
+
+  function fracToHMS(frac) {
+    return new Date(flightStartMs + frac * flightSpanMs).toISOString().slice(11, 19);
+  }
+
+  /** Parse "HH:MM:SS" (or "HH:MM") on the flight's UTC day → fraction of flight, or null. */
+  function hmsToFrac(str) {
+    const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(str).trim());
+    if (!m || !parsed.length) return null;
+    const d = new Date(flightStartMs);
+    d.setUTCHours(+m[1], +m[2], +(m[3] || 0), 0);
+    return Math.max(0, Math.min(1, (d.getTime() - flightStartMs) / flightSpanMs));
+  }
+
+  function onStartEntry(e) {
+    const f = hmsToFrac(e.currentTarget.value);
+    if (f == null) {
+      e.currentTarget.value = startLabel;
+      return;
+    }
+    if (snippetMode === 'duration') {
+      // keep the duration offset, slide the whole window
+      const width = Math.max(MIN_GAP, rangeEnd - rangeStart);
+      rangeStart = Math.min(f, 1 - MIN_GAP);
+      rangeEnd = Math.min(1, rangeStart + width);
+    } else {
+      rangeStart = Math.min(f, rangeEnd - MIN_GAP);
+    }
+    saveSlideConfig();
+    drawPlot();
+  }
+
+  function onEndEntry(e) {
+    const f = hmsToFrac(e.currentTarget.value);
+    if (f == null) {
+      e.currentTarget.value = endLabel;
+      return;
+    }
+    rangeEnd = Math.max(f, rangeStart + MIN_GAP);
+    saveSlideConfig();
+    drawPlot();
+  }
+
+  function onDurationEntry(e) {
+    const v = +e.currentTarget.value;
+    if (!isFinite(v) || v <= 0) {
+      e.currentTarget.value = durationDisplay;
+      return;
+    }
+    const secs = durationUnit === 'min' ? v * 60 : v;
+    const width = Math.max(MIN_GAP, (secs * 1000) / flightSpanMs);
+    rangeEnd = Math.min(1, rangeStart + width);
+    saveSlideConfig();
+    drawPlot();
+  }
+
+  function resetSnippet() {
+    rangeStart = 0;
+    rangeEnd = 1;
+    saveSlideConfig();
+    drawPlot();
+  }
+
+  function startHandleDrag(which, e) {
+    e.stopPropagation();
+    e.preventDefault();
+    draggingHandle = which;
+    window.addEventListener('pointermove', onHandleMove);
+    window.addEventListener('pointerup', endHandleDrag);
+  }
+
+  function onHandleMove(e) {
+    if (!draggingHandle || !timelineEl) return;
+    const rect = timelineEl.getBoundingClientRect();
+    setRange(draggingHandle, (e.clientX - rect.left) / rect.width);
+  }
+
+  function endHandleDrag() {
+    draggingHandle = null;
+    window.removeEventListener('pointermove', onHandleMove);
+    window.removeEventListener('pointerup', endHandleDrag);
   }
 
   function openCapture() {
@@ -474,6 +570,27 @@
             class="timeline-window"
             style="left: {rangeStart * 100}%; width: {(rangeEnd - rangeStart) * 100}%"
           ></div>
+          <!-- draggable snippet start / end handles -->
+          <button
+            type="button"
+            class="timeline-handle start"
+            class:dragging={draggingHandle === 'start'}
+            style="left: {rangeStart * 100}%"
+            title="Snippet start — drag to set ({startLabel})"
+            aria-label="Snippet start"
+            on:pointerdown={(e) => startHandleDrag('start', e)}
+            on:click|stopPropagation
+          >▶</button>
+          <button
+            type="button"
+            class="timeline-handle end"
+            class:dragging={draggingHandle === 'end'}
+            style="left: {rangeEnd * 100}%"
+            title="Snippet end — drag to set ({endLabel})"
+            aria-label="Snippet end"
+            on:pointerdown={(e) => startHandleDrag('end', e)}
+            on:click|stopPropagation
+          >◀</button>
         </div>
         <div class="timeline-labels mono">
           <span>{parsed[0]?._date?.toISOString().slice(11, 19) || ''}</span>
@@ -544,30 +661,68 @@
                 >
               {/each}
             </div>
-            <div class="range">
+            <div class="snippet">
               <span class="ctl-label">Time snippet</span>
-              <label class="mono"
+              <label class="mono snippet-field"
                 >Start
                 <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={rangeStart}
-                  on:input={(e) => setRange('start', e.currentTarget.value)}
+                  class="time-in mono"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder="HH:MM:SS"
+                  value={startLabel}
+                  on:change={onStartEntry}
                 />
               </label>
-              <label class="mono"
-                >End
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={rangeEnd}
-                  on:input={(e) => setRange('end', e.currentTarget.value)}
-                />
-              </label>
+              <div class="mode-toggle" role="group" aria-label="Snippet end definition">
+                <button
+                  type="button"
+                  class="chip"
+                  class:on={snippetMode === 'duration'}
+                  on:click={() => (snippetMode = 'duration')}>Duration</button
+                >
+                <button
+                  type="button"
+                  class="chip"
+                  class:on={snippetMode === 'end'}
+                  on:click={() => (snippetMode = 'end')}>End time</button
+                >
+              </div>
+              {#if snippetMode === 'duration'}
+                <label class="mono snippet-field"
+                  >For
+                  <input
+                    class="dur-in mono"
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={durationDisplay}
+                    on:change={onDurationEntry}
+                  />
+                </label>
+                <select
+                  class="unit mono"
+                  aria-label="Duration unit"
+                  bind:value={durationUnit}
+                >
+                  <option value="sec">sec</option>
+                  <option value="min">min</option>
+                </select>
+              {:else}
+                <label class="mono snippet-field"
+                  >End
+                  <input
+                    class="time-in mono"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="HH:MM:SS"
+                    value={endLabel}
+                    on:change={onEndEntry}
+                  />
+                </label>
+              {/if}
+              <button type="button" class="chip" on:click={resetSnippet}>Full flight</button>
+              <span class="snippet-summary mono">{startLabel}–{endLabel} · {Math.round(snippetSecs)}s</span>
             </div>
           </div>
         </div>
@@ -631,7 +786,7 @@
         <p class="hint">
           Saves current D3 config: <strong>{selectedParams.join(', ')}</strong> · format
           <strong>{plotFormat}</strong> · time window
-          <span class="mono">{Math.round(rangeStart * 100)}%–{Math.round(rangeEnd * 100)}%</span>
+          <span class="mono">{startLabel}–{endLabel} ({Math.round(snippetSecs)}s)</span>
         </p>
         <label class="field">
           Severity
@@ -717,6 +872,14 @@
     position: absolute; top: 50%; width: 12px; height: 12px; margin-left: -6px; margin-top: -6px;
     border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg-deep); z-index: 2;
   }
+  .timeline-handle {
+    position: absolute; top: -8px; height: 26px; width: 16px; margin-left: -8px;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+    background: transparent; border: none; color: var(--collect);
+    font-size: 9px; line-height: 1; cursor: ew-resize; z-index: 3;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+  }
+  .timeline-handle:hover, .timeline-handle.dragging { color: var(--accent); transform: scale(1.35); }
   .timeline-labels { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); margin-top: 0.25rem; }
 
   .station-main {
@@ -766,9 +929,18 @@
   .chip.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
   .builder-controls { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; }
   .ctl-label { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: 0.35rem; }
-  .fmt, .range { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
-  .range label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; color: var(--muted); }
-  .range input[type='range'] { width: 90px; accent-color: var(--accent); }
+  .fmt, .snippet { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+  .snippet-field { display: flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; color: var(--muted); }
+  .time-in, .dur-in, .unit {
+    background: var(--bg-deep); border: 1px solid var(--line); color: var(--text);
+    border-radius: 3px; padding: 0.22rem 0.4rem; font-size: 0.75rem;
+  }
+  .time-in { width: 84px; }
+  .time-in:focus, .dur-in:focus, .unit:focus { outline: none; border-color: var(--accent); }
+  .dur-in { width: 60px; }
+  .unit { padding-right: 0.2rem; }
+  .mode-toggle { display: flex; gap: 0.25rem; }
+  .snippet-summary { font-size: 0.7rem; color: var(--collect); }
   .plot { flex: 1; min-height: 240px; background: var(--bg-deep); border: 1px solid var(--line); border-radius: 4px; }
 
   .slide-list { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.75rem; }
