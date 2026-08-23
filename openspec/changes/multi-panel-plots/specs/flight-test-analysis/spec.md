@@ -10,7 +10,8 @@ timeline scrub cursor so different data can be correlated on one time base.
 - **GIVEN** the "Subsystem drop-outs" slide
 - **WHEN** the analyst reviews a master caution assertion
 - **THEN** the top panel shows the caution and pump/hydraulic discretes as
-  step traces
+  step traces, each in its own labeled lane (logic-analyzer style) so traces
+  never draw on top of each other
 - **AND** the bottom panel shows oil pressure, fuel flow, and RPM telemetry
   aligned to the same time axis
 - **AND** the scrub cursor appears at the same time in every panel

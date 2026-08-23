@@ -73,6 +73,7 @@ Feature: Immersive Flight Test Analysis Station
     Given the "Subsystem drop-outs" analysis slide
     Then two stacked panels share the same time axis and scrub cursor
     And the top panel shows master caution and pump/hydraulic discretes as step traces
+    And each discrete renders in its own labeled lane rather than overlapping
     And the bottom panel shows the corresponding oil pressure, fuel flow, and RPM telemetry
     And a drop-out in the top panel aligns with the telemetry response below it
 
