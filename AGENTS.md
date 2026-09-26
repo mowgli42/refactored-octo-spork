@@ -27,6 +27,10 @@ PYTHONPATH="$PWD" backend/.venv/bin/python -m pytest backend/tests/ -q
 - `pandas<3` avoids the current uppercase frequency compatibility breakage in tests.
 - Preserve existing local user changes; stage only files you intentionally modify.
 
+## Secrets
+
+Do not commit private keys, *-key.pem, *.key, .env secrets, or BEGIN … PRIVATE KEY. Generate locally; gitignore keys.
+
 ## Issue Tracking
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` for workflow context, or install hooks with `bd hooks install` for automatic context injection.
